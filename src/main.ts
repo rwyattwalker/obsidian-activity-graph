@@ -1,99 +1,148 @@
-import {App, Editor, MarkdownView, Modal, Notice, Plugin} from 'obsidian';
-import {DEFAULT_SETTINGS, MyPluginSettings, SampleSettingTab} from "./settings";
+import { MarkdownPostProcessorContext, Plugin } from "obsidian";
 
-// Remember to rename these classes and interfaces!
+type HeatmapRow = {
+	date: string;
+	value: number;
+};
 
-export default class MyPlugin extends Plugin {
-	settings: MyPluginSettings;
-
+export default class ExerciseHeatmapPlugin extends Plugin {
 	async onload() {
-		await this.loadSettings();
+		this.registerMarkdownCodeBlockProcessor(
+			"exercise-heatmap",
+			async (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
+				const dv = (this.app as any).plugins?.plugins?.dataview?.api;
+				if (!dv) {
+					el.createEl("div", { text: "Dataview is required and is not enabled." });
+					return;
+				}
 
-		// This creates an icon in the left ribbon.
-		this.addRibbonIcon('dice', 'Sample', (evt: MouseEvent) => {
-			// Called when the user clicks the icon.
-			new Notice('This is a notice!');
-		});
+				try {
+					const result = await dv.query(source, ctx.sourcePath);
 
-		// This adds a status bar item to the bottom of the app. Does not work on mobile apps.
-		const statusBarItemEl = this.addStatusBarItem();
-		statusBarItemEl.setText('Status bar text');
-
-		// This adds a simple command that can be triggered anywhere
-		this.addCommand({
-			id: 'open-modal-simple',
-			name: 'Open modal (simple)',
-			callback: () => {
-				new SampleModal(this.app).open();
-			}
-		});
-		// This adds an editor command that can perform some operation on the current editor instance
-		this.addCommand({
-			id: 'replace-selected',
-			name: 'Replace selected content',
-			editorCallback: (editor: Editor, view: MarkdownView) => {
-				editor.replaceSelection('Sample editor command');
-			}
-		});
-		// This adds a complex command that can check whether the current state of the app allows execution of the command
-		this.addCommand({
-			id: 'open-modal-complex',
-			name: 'Open modal (complex)',
-			checkCallback: (checking: boolean) => {
-				// Conditions to check
-				const markdownView = this.app.workspace.getActiveViewOfType(MarkdownView);
-				if (markdownView) {
-					// If checking is true, we're simply "checking" if the command can be run.
-					// If checking is false, then we want to actually perform the operation.
-					if (!checking) {
-						new SampleModal(this.app).open();
+					if (!result || result.successful === false) {
+						el.createEl("pre", {
+							text: `Dataview query failed:\n${result?.error ?? "Unknown error"}`,
+						});
+						return;
 					}
 
-					// This command will only show up in Command Palette when the check function returns true
-					return true;
+					const rows = this.normalizeRows(result.value);
+					if (!rows.length) {
+						el.createEl("div", { text: "No results." });
+						return;
+					}
+
+					this.renderCalendar(el, rows);
+				} catch (err) {
+					el.createEl("pre", {
+						text: `Plugin error:\n${err instanceof Error ? err.message : String(err)}`,
+					});
 				}
-				return false;
 			}
-		});
-
-		// This adds a settings tab so the user can configure various aspects of the plugin
-		this.addSettingTab(new SampleSettingTab(this.app, this));
-
-		// If the plugin hooks up any global DOM events (on parts of the app that doesn't belong to this plugin)
-		// Using this function will automatically remove the event listener when this plugin is disabled.
-		this.registerDomEvent(document, 'click', (evt: MouseEvent) => {
-			new Notice("Click");
-		});
-
-		// When registering intervals, this function will automatically clear the interval when the plugin is disabled.
-		this.registerInterval(window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000));
-
+		);
 	}
 
-	onunload() {
+	normalizeRows(tableResult: any): HeatmapRow[] {
+		if (!tableResult || tableResult.type !== "table") {
+			return [];
+		}
+
+		const headers: string[] = tableResult.headers ?? [];
+		const values: any[][] = tableResult.values ?? [];
+
+		const dateIndex = headers.findIndex((h) => h === "date");
+		const valueIndex = headers.findIndex((h) => h === "value");
+
+		if (dateIndex === -1 || valueIndex === -1) {
+			return [];
+		}
+
+		const rows: HeatmapRow[] = [];
+
+		for (const row of values) {
+			const rawDate = row[dateIndex];
+			const rawValue = row[valueIndex];
+
+			if (!rawDate) continue;
+
+			const dateString =
+				typeof rawDate === "string"
+					? rawDate
+					: typeof rawDate?.toISODate === "function"
+						? rawDate.toISODate()
+						: String(rawDate);
+
+			const numValue = Number(rawValue ?? 0);
+			if (!dateString || Number.isNaN(numValue)) continue;
+
+			rows.push({ date: dateString, value: numValue });
+		}
+
+		return rows;
 	}
 
-	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData() as Partial<MyPluginSettings>);
+	renderCalendar(container: HTMLElement, rows: HeatmapRow[]) {
+		container.empty();
+
+		const valueMap = new Map<string, number>();
+		for (const row of rows) {
+			valueMap.set(row.date, row.value);
+		}
+
+		const dates = rows
+			.map((r) => new Date(r.date + "T00:00:00"))
+			.sort((a, b) => a.getTime() - b.getTime());
+
+		if (dates.length === 0) {
+			container.createEl("div", { text: "No results." });
+			return;
+		}
+
+		const end = new Date(dates[dates.length - 1]!.getTime());
+		const start = new Date(end.getTime());
+		start.setDate(start.getDate() - 364);
+
+		// move start back to Sunday so the first column is a full week
+		start.setDate(start.getDate() - start.getDay());
+
+		const root = container.createDiv({ cls: "exercise-heatmap" });
+		const weeksEl = root.createDiv({ cls: "exercise-heatmap-weeks" });
+
+		const current = new Date(start);
+
+		while (current <= end) {
+			const weekEl = weeksEl.createDiv({ cls: "exercise-heatmap-week" });
+
+			for (let i = 0; i < 7; i++) {
+				if (current > end) break;
+
+				const iso = this.toISODate(current);
+				const value = valueMap.get(iso) ?? 0;
+
+				const cell = weekEl.createDiv({
+					cls: `exercise-heatmap-cell level-${this.getLevel(value)}`,
+				});
+
+				cell.setAttr("title", `${iso}: ${value}`);
+				cell.setAttr("aria-label", `${iso}: ${value}`);
+
+				current.setDate(current.getDate() + 1);
+			}
+		}
 	}
 
-	async saveSettings() {
-		await this.saveData(this.settings);
-	}
-}
-
-class SampleModal extends Modal {
-	constructor(app: App) {
-		super(app);
+	getLevel(value: number): number {
+		if (value <= 0) return 0;
+		if (value === 1) return 1;
+		if (value === 2) return 2;
+		if (value === 3) return 3;
+		return 4;
 	}
 
-	onOpen() {
-		let {contentEl} = this;
-		contentEl.setText('Woah!');
-	}
-
-	onClose() {
-		const {contentEl} = this;
-		contentEl.empty();
+	toISODate(date: Date): string {
+		const year = date.getFullYear();
+		const month = String(date.getMonth() + 1).padStart(2, "0");
+		const day = String(date.getDate()).padStart(2, "0");
+		return `${year}-${month}-${day}`;
 	}
 }
