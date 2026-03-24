@@ -60,8 +60,6 @@ Supported overrides:
 
 ## Screenshots
 
-<!-- Add screenshots here -->
+<img width="1200" height="492" alt="image" src="https://github.com/user-attachments/assets/f8263d6a-ddc3-4bf1-9e0e-d68cd5c2b0d3" />
 
-## Screenshots (Mobile)
 
-<!-- Add screenshots here -->
