@@ -1,14 +1,30 @@
-import { MarkdownPostProcessorContext, Plugin } from "obsidian";
+import {
+	App,
+	MarkdownPostProcessorContext,
+	Plugin,
+	PluginSettingTab,
+	Setting,
+} from "obsidian";
+import { ActivityGraphSettingTab, ActivityGraphSettings, DEFAULT_SETTINGS, GRADIENTS } from "settings";
 
 type HeatmapRow = {
 	date: string;
 	value: number;
 };
 
-export default class ExerciseHeatmapPlugin extends Plugin {
+type GraphOverrides = Partial<ActivityGraphSettings> & {
+	title?: string;
+};
+
+export default class ActivityGraphPlugin extends Plugin {
+	settings: ActivityGraphSettings;
+
 	async onload() {
+		await this.loadSettings();
+		this.addSettingTab(new ActivityGraphSettingTab(this.app, this));
+
 		this.registerMarkdownCodeBlockProcessor(
-			"exercise-heatmap",
+			"activity-graph",
 			async (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
 				const dv = (this.app as any).plugins?.plugins?.dataview?.api;
 				if (!dv) {
@@ -17,7 +33,11 @@ export default class ExerciseHeatmapPlugin extends Plugin {
 				}
 
 				try {
-					const result = await dv.query(source, ctx.sourcePath);
+
+					const { query, overrides } = this.parseBlock(source);
+					const settings = { ...this.settings, ...overrides };
+
+					const result = await dv.query(query, ctx.sourcePath);
 
 					if (!result || result.successful === false) {
 						el.createEl("pre", {
@@ -32,7 +52,7 @@ export default class ExerciseHeatmapPlugin extends Plugin {
 						return;
 					}
 
-					this.renderCalendar(el, rows);
+					this.renderCalendar(el, rows, settings, overrides.title);
 				} catch (err) {
 					el.createEl("pre", {
 						text: `Plugin error:\n${err instanceof Error ? err.message : String(err)}`,
@@ -40,6 +60,14 @@ export default class ExerciseHeatmapPlugin extends Plugin {
 				}
 			}
 		);
+	}
+
+	async loadSettings() {
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+	}
+
+	async saveSettings() {
+		await this.saveData(this.settings);
 	}
 
 	normalizeRows(tableResult: any): HeatmapRow[] {
@@ -81,7 +109,8 @@ export default class ExerciseHeatmapPlugin extends Plugin {
 		return rows;
 	}
 
-	renderCalendar(container: HTMLElement, rows: HeatmapRow[]) {
+	renderCalendar(container: HTMLElement, rows: HeatmapRow[], settings: ActivityGraphSettings,
+		title?: string) {
 		container.empty();
 
 		const valueMap = new Map<string, number>();
@@ -100,27 +129,57 @@ export default class ExerciseHeatmapPlugin extends Plugin {
 
 		const end = new Date(dates[dates.length - 1]!.getTime());
 		const start = new Date(end.getTime());
-		start.setDate(start.getDate() - 364);
+		start.setDate(start.getDate() - (settings.daysToShow - 1));
 
-		// move start back to Sunday so the first column is a full week
-		start.setDate(start.getDate() - start.getDay());
+		const weekStart = settings.startWeekOnMonday ? 1 : 0;
+		const startDay = start.getDay();
+		const offset = (startDay - weekStart + 7) % 7;
+		start.setDate(start.getDate() - offset);
 
-		const root = container.createDiv({ cls: "exercise-heatmap" });
-		const weeksEl = root.createDiv({ cls: "exercise-heatmap-weeks" });
+		const maxValue = Math.max(...rows.map((r) => r.value), 1);
 
-		const current = new Date(start);
+		const root = container.createDiv({ cls: "activity-graph" });
+
+		if (title) {
+			root.createEl("div", {
+				text: title,
+				cls: "activity-graph-title",
+			});
+		}
+
+		const gradient = GRADIENTS[settings.colorGradient] ?? GRADIENTS.green;
+
+		root.style.setProperty("--heatmap-1", gradient[0]);
+		root.style.setProperty("--heatmap-2", gradient[1]);
+		root.style.setProperty("--heatmap-3", gradient[2]);
+		root.style.setProperty("--heatmap-4", gradient[3]);
+
+		if (settings.showMonthLabels) {
+			this.renderMonthLabels(root, start, end);
+		}
+
+		const body = root.createDiv({ cls: "activity-graph-body" });
+
+		if (settings.showWeekdayLabels) {
+			this.renderWeekdayLabels(body);
+		}
+
+		const weeksEl = body.createDiv({ cls: "activity-graph-weeks" });
+
+		const current = new Date(start.getTime());
 
 		while (current <= end) {
-			const weekEl = weeksEl.createDiv({ cls: "exercise-heatmap-week" });
+			const weekEl = weeksEl.createDiv({ cls: "activity-graph-week" });
 
 			for (let i = 0; i < 7; i++) {
 				if (current > end) break;
 
 				const iso = this.toISODate(current);
 				const value = valueMap.get(iso) ?? 0;
+				const level = this.getLevel(value, maxValue);
 
 				const cell = weekEl.createDiv({
-					cls: `exercise-heatmap-cell level-${this.getLevel(value)}`,
+					cls: `activity-graph-cell level-${level}`,
 				});
 
 				cell.setAttr("title", `${iso}: ${value}`);
@@ -129,13 +188,81 @@ export default class ExerciseHeatmapPlugin extends Plugin {
 				current.setDate(current.getDate() + 1);
 			}
 		}
+
+		if (settings.showLegend) {
+			this.renderLegend(root);
+		}
 	}
 
-	getLevel(value: number): number {
+	renderMonthLabels(container: HTMLElement, start: Date, end: Date) {
+		const monthRow = container.createDiv({ cls: "activity-graph-months" });
+		const spacer = monthRow.createDiv({ cls: "activity-graph-month-spacer" });
+		spacer.setText("");
+
+		const monthsEl = monthRow.createDiv({ cls: "activity-graph-month-labels" });
+
+		const current = new Date(start.getTime());
+		let lastMonth = -1;
+
+		while (current <= end) {
+			const month = current.getMonth();
+
+			if (month !== lastMonth) {
+				const label = monthsEl.createDiv({ cls: "activity-graph-month-label" });
+				label.setText(
+					current.toLocaleString(undefined, { month: "short" })
+				);
+				lastMonth = month;
+			} else {
+				const spacerCell = monthsEl.createDiv({ cls: "activity-graph-month-label activity-graph-month-label--empty" });
+				spacerCell.setText("");
+			}
+
+			current.setDate(current.getDate() + 7);
+		}
+	}
+
+	renderWeekdayLabels(container: HTMLElement) {
+		const labelsEl = container.createDiv({ cls: "activity-graph-weekday-labels" });
+
+		const labels = this.settings.startWeekOnMonday
+			? ["Mon", "", "Wed", "", "Fri", "", ""]
+			: ["Sun", "", "Tue", "", "Thu", "", "Sat"];
+
+		for (const label of labels) {
+			const labelEl = labelsEl.createDiv({ cls: "activity-graph-weekday-label" });
+			labelEl.setText(label);
+		}
+	}
+
+	renderLegend(container: HTMLElement) {
+		const legend = container.createDiv({ cls: "activity-graph-legend" });
+
+		legend.createSpan({
+			text: this.settings.legendLessLabel,
+			cls: "activity-graph-legend-text",
+		});
+
+		for (let i = 0; i <= 4; i++) {
+			legend.createDiv({
+				cls: `activity-graph-cell activity-graph-legend-cell level-${i}`,
+			});
+		}
+
+		legend.createSpan({
+			text: this.settings.legendMoreLabel,
+			cls: "activity-graph-legend-text",
+		});
+	}
+
+	getLevel(value: number, maxValue: number): number {
 		if (value <= 0) return 0;
-		if (value === 1) return 1;
-		if (value === 2) return 2;
-		if (value === 3) return 3;
+
+		const ratio = value / maxValue;
+
+		if (ratio <= 0.25) return 1;
+		if (ratio <= 0.5) return 2;
+		if (ratio <= 0.75) return 3;
 		return 4;
 	}
 
@@ -144,5 +271,82 @@ export default class ExerciseHeatmapPlugin extends Plugin {
 		const month = String(date.getMonth() + 1).padStart(2, "0");
 		const day = String(date.getDate()).padStart(2, "0");
 		return `${year}-${month}-${day}`;
+	}
+
+	parseBlock(source: string): { query: string; overrides: GraphOverrides } {
+		const separator = "\n---\n";
+		const index = source.indexOf(separator);
+
+		if (index === -1) {
+			return {
+				query: source.trim(),
+				overrides: {},
+			};
+		}
+
+		const query = source.slice(0, index).trim();
+		const overridesText = source.slice(index + separator.length).trim();
+
+		return {
+			query,
+			overrides: this.parseOverrides(overridesText),
+		};
+	}
+
+	parseOverrides(text: string): GraphOverrides {
+		const overrides: GraphOverrides = {};
+
+		if (!text) return overrides;
+
+		for (const rawLine of text.split("\n")) {
+			const line = rawLine.trim();
+			if (!line || line.startsWith("#")) continue;
+
+			const colonIndex = line.indexOf(":");
+			if (colonIndex === -1) continue;
+
+			const key = line.slice(0, colonIndex).trim();
+			const rawValue = line.slice(colonIndex + 1).trim();
+
+			let value: string | number | boolean = rawValue;
+
+			if (rawValue === "true") value = true;
+			else if (rawValue === "false") value = false;
+			else if (!Number.isNaN(Number(rawValue)) && rawValue !== "") value = Number(rawValue);
+
+			switch (key) {
+				case "title":
+					overrides.title = String(value);
+					break;
+				case "daysToShow":
+					if (typeof value === "number") overrides.daysToShow = value;
+					break;
+				case "showMonthLabels":
+					if (typeof value === "boolean") overrides.showMonthLabels = value;
+					break;
+				case "showWeekdayLabels":
+					if (typeof value === "boolean") overrides.showWeekdayLabels = value;
+					break;
+				case "showLegend":
+					if (typeof value === "boolean") overrides.showLegend = value;
+					break;
+				case "startWeekOnMonday":
+					if (typeof value === "boolean") overrides.startWeekOnMonday = value;
+					break;
+				case "legendLessLabel":
+					overrides.legendLessLabel = String(value);
+					break;
+				case "legendMoreLabel":
+					overrides.legendMoreLabel = String(value);
+					break;
+				case "colorGradient":
+					if (value === "green" || value === "blue" || value === "purple" || value === "orange" || value === "red") {
+						overrides.colorGradient = value;
+					}
+					break;
+			}
+		}
+
+		return overrides;
 	}
 }

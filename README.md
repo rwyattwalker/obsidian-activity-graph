@@ -1,90 +1,172 @@
-# Obsidian Sample Plugin
+# Activity Graph (Obsidian Plugin)
 
-This is a sample plugin for Obsidian (https://obsidian.md).
+A lightweight, GitHub-style contribution graph for Obsidian that uses **Dataview queries directly** — no extra DSL, no abstraction layer.
 
-This project uses TypeScript to provide type checking and documentation.
-The repo depends on the latest plugin API (obsidian.d.ts) in TypeScript Definition format, which contains TSDoc comments describing what it does.
+---
 
-This sample plugin demonstrates some of the basic functionality the plugin API can do.
-- Adds a ribbon icon, which shows a Notice when clicked.
-- Adds a command "Open modal (simple)" which opens a Modal.
-- Adds a plugin setting tab to the settings page.
-- Registers a global click event and output 'click' to the console.
-- Registers a global interval which logs 'setInterval' to the console.
+## ✨ Features
 
-## First time developing plugins?
+- 📊 GitHub-style heatmap visualization
+- 🔍 Direct Dataview query support
+- 🎨 Multiple color gradients (Tokyo Night inspired)
+- ⚙️ Global settings + per-graph overrides
+- 📅 Month + weekday labels
+- 📈 Automatic scaling (binary + intensity aware)
 
-Quick starting guide for new plugin devs:
+---
 
-- Check if [someone already developed a plugin for what you want](https://obsidian.md/plugins)! There might be an existing plugin similar enough that you can partner up with.
-- Make a copy of this repo as a template with the "Use this template" button (login to GitHub if you don't see it).
-- Clone your repo to a local development folder. For convenience, you can place this folder in your `.obsidian/plugins/your-plugin-name` folder.
-- Install NodeJS, then run `npm i` in the command line under your repo folder.
-- Run `npm run dev` to compile your plugin from `main.ts` to `main.js`.
-- Make changes to `main.ts` (or create new `.ts` files). Those changes should be automatically compiled into `main.js`.
-- Reload Obsidian to load the new version of your plugin.
-- Enable plugin in settings window.
-- For updates to the Obsidian API run `npm update` in the command line under your repo folder.
+## 🚀 Usage
 
-## Releasing new releases
+Create a code block like this:
 
-- Update your `manifest.json` with your new version number, such as `1.0.1`, and the minimum Obsidian version required for your latest release.
-- Update your `versions.json` file with `"new-plugin-version": "minimum-obsidian-version"` so older versions of Obsidian can download an older version of your plugin that's compatible.
-- Create new GitHub release using your new version number as the "Tag version". Use the exact version number, don't include a prefix `v`. See here for an example: https://github.com/obsidianmd/obsidian-sample-plugin/releases
-- Upload the files `manifest.json`, `main.js`, `styles.css` as binary attachments. Note: The manifest.json file must be in two places, first the root path of your repository and also in the release.
-- Publish the release.
-
-> You can simplify the version bump process by running `npm version patch`, `npm version minor` or `npm version major` after updating `minAppVersion` manually in `manifest.json`.
-> The command will bump version in `manifest.json` and `package.json`, and add the entry for the new version to `versions.json`
-
-## Adding your plugin to the community plugin list
-
-- Check the [plugin guidelines](https://docs.obsidian.md/Plugins/Releasing/Plugin+guidelines).
-- Publish an initial version.
-- Make sure you have a `README.md` file in the root of your repo.
-- Make a pull request at https://github.com/obsidianmd/obsidian-releases to add your plugin.
-
-## How to use
-
-- Clone this repo.
-- Make sure your NodeJS is at least v16 (`node --version`).
-- `npm i` or `yarn` to install dependencies.
-- `npm run dev` to start compilation in watch mode.
-
-## Manually installing the plugin
-
-- Copy over `main.js`, `styles.css`, `manifest.json` to your vault `VaultFolder/.obsidian/plugins/your-plugin-id/`.
-
-## Improve code quality with eslint
-- [ESLint](https://eslint.org/) is a tool that analyzes your code to quickly find problems. You can run ESLint against your plugin to find common bugs and ways to improve your code. 
-- This project already has eslint preconfigured, you can invoke a check by running`npm run lint`
-- Together with a custom eslint [plugin](https://github.com/obsidianmd/eslint-plugin) for Obsidan specific code guidelines.
-- A GitHub action is preconfigured to automatically lint every commit on all branches.
-
-## Funding URL
-
-You can include funding URLs where people who use your plugin can financially support it.
-
-The simple way is to set the `fundingUrl` field to your link in your `manifest.json` file:
-
-```json
-{
-    "fundingUrl": "https://buymeacoffee.com"
-}
+```activity-graph
+TABLE date(file.name) AS date, 1 AS value
+FROM "Exercise Logs"
+SORT date(file.name) ASC
 ```
 
-If you have multiple URLs, you can also do:
+---
 
-```json
-{
-    "fundingUrl": {
-        "Buy Me a Coffee": "https://buymeacoffee.com",
-        "GitHub Sponsor": "https://github.com/sponsors",
-        "Patreon": "https://www.patreon.com/"
-    }
-}
+## 🧠 Query Requirements
+
+Your query must return:
+
+TABLE <date_expr> AS date, <number_expr> AS value
+
+### Examples
+
+#### Count files (binary activity)
+
+```activity-graph
+TABLE file.day AS date, 1 AS value
+FROM "Exercise Logs"
 ```
 
-## API Documentation
+#### Track duration
 
-See https://docs.obsidian.md
+```activity-graph
+TABLE file.day AS date, duration AS value
+FROM "Exercise Logs"
+```
+
+#### Track hours studied
+
+```activity-graph
+TABLE file.day AS date, hours_studied AS value
+FROM "School/Study Log"
+```
+
+---
+
+## 🎨 Color Gradients
+
+Available gradients:
+
+- Green (default)
+- Blue
+- Purple
+- Orange
+- Red
+
+Configured in plugin settings.
+
+---
+
+## ⚙️ Settings
+
+Global settings include:
+
+- Days to display
+- Show month labels
+- Show weekday labels
+- Show legend
+- Start week on Monday
+- Color gradient
+- Legend labels ("Less" → "More")
+
+---
+
+## 🔧 Overrides (Per Graph)
+
+You can override any setting per graph using `---`:
+
+```activity-graph
+TABLE file.day AS date, duration AS value
+FROM "Exercise Logs"
+
+---
+title: Exercise
+daysToShow: 90
+showLegend: false
+colorGradient: purple
+```
+
+### Supported Overrides
+
+- title
+- daysToShow
+- showMonthLabels
+- showWeekdayLabels
+- showLegend
+- startWeekOnMonday
+- colorGradient
+- legendLessLabel
+- legendMoreLabel
+
+---
+
+## 📊 Behavior
+
+### Binary data (e.g. file exists)
+
+If all values are `1`, the graph uses a single color level.
+
+### Continuous data (e.g. hours, duration)
+
+Values are scaled relative to the maximum value in the dataset.
+
+---
+
+## 🧱 Architecture
+
+Markdown → Dataview → Activity Graph → Visualization
+
+- Dataview handles querying
+- Plugin handles rendering
+- No custom query language required
+
+---
+
+## 💡 Design Philosophy
+
+- Keep data in plain markdown
+- Use Dataview as the query engine
+- Keep the plugin as a pure visualization layer
+
+---
+
+## 🛠 Development
+
+Built using:
+
+- Obsidian Plugin API
+- Dataview Plugin API
+- TypeScript
+
+---
+
+## 📌 Notes
+
+- Requires Dataview plugin
+- Works best with ISO date filenames (YYYY-MM-DD.md)
+- Supports both frontmatter and inline fields
+
+---
+
+## 🔮 Future Improvements
+
+- Smooth gradient interpolation
+- Custom user-defined gradients
+- Tooltip enhancements
+- Per-cell click actions
+- Export support
