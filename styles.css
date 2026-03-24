@@ -117,4 +117,5 @@
 	height: 16px;
 	border-radius: 3px;
 	border: 1px solid var(--background-modifier-border-hover);
+	background: var(--activity-graph-preview-color, var(--background-modifier-border));
 }

@@ -34,6 +34,12 @@ export const GRADIENTS: Record<GradientName, [string, string, string, string]> =
 	red: ["#331a1a", "#662c2c", "#9c4a4a", "#f7768e"], // red accent
 };
 
+const setCssProps = (el: HTMLElement, props: Record<string, string>): void => {
+	for (const [key, value] of Object.entries(props)) {
+		el.style.setProperty(key, value);
+	}
+};
+
 export class ActivityGraphSettingTab extends PluginSettingTab {
 	plugin: ActivityGraphPlugin;
 
@@ -46,7 +52,7 @@ export class ActivityGraphSettingTab extends PluginSettingTab {
 		const { containerEl } = this;
 		containerEl.empty();
 
-		containerEl.createEl("h2", { text: "Activity Graph Settings" });
+		new Setting(containerEl).setName("Display").setHeading();
 
 		new Setting(containerEl)
 			.setName("Days to show")
@@ -98,7 +104,7 @@ export class ActivityGraphSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-			.setName("Start week on Monday")
+			.setName("Week starts on monday")
 			.addToggle((toggle) =>
 				toggle
 					.setValue(this.plugin.settings.startWeekOnMonday)
@@ -109,7 +115,7 @@ export class ActivityGraphSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-			.setName('Legend "Less" label')
+			.setName('Legend "less" label')
 			.addText((text) =>
 				text
 					.setValue(this.plugin.settings.legendLessLabel)
@@ -120,7 +126,7 @@ export class ActivityGraphSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-			.setName('Legend "More" label')
+			.setName('Legend "more" label')
 			.addText((text) =>
 				text
 					.setValue(this.plugin.settings.legendMoreLabel)
@@ -161,13 +167,15 @@ export class ActivityGraphSettingTab extends PluginSettingTab {
 			const emptyCell = previewEl.createDiv({
 				cls: "activity-graph-gradient-preview-cell",
 			});
-			emptyCell.style.background = "var(--background-modifier-border)";
+			setCssProps(emptyCell, {
+				"--activity-graph-preview-color": "var(--background-modifier-border)",
+			});
 
 			for (const color of gradient) {
 				const cell = previewEl.createDiv({
 					cls: "activity-graph-gradient-preview-cell",
 				});
-				cell.style.background = color;
+				setCssProps(cell, { "--activity-graph-preview-color": color });
 			}
 		};
 

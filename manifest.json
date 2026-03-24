@@ -3,9 +3,9 @@
 	"name": "Activity Graph",
 	"version": "1.0.0",
 	"minAppVersion": "0.15.0",
-	"description": "Demonstrates some of the capabilities of the Obsidian API.",
-	"author": "Obsidian",
-	"authorUrl": "https://obsidian.md",
-	"fundingUrl": "https://obsidian.md/pricing",
+	"description": "Render activity heatmaps from Dataview query results.",
+	"author": "Wyatt Walker",
+	"authorUrl": "https://github.com/rwyattwalker",
+	"fundingUrl": "https://github.com/sponsors/rwyattwalker",
 	"isDesktopOnly": false
 }

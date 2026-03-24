@@ -1,10 +1,4 @@
-import {
-	App,
-	MarkdownPostProcessorContext,
-	Plugin,
-	PluginSettingTab,
-	Setting,
-} from "obsidian";
+import { MarkdownPostProcessorContext, Plugin } from "obsidian";
 import { ActivityGraphSettingTab, ActivityGraphSettings, DEFAULT_SETTINGS, GRADIENTS } from "settings";
 
 type HeatmapRow = {
@@ -14,6 +8,69 @@ type HeatmapRow = {
 
 type GraphOverrides = Partial<ActivityGraphSettings> & {
 	title?: string;
+};
+
+type DataviewQueryResult = {
+	successful: boolean;
+	value: unknown;
+	error?: string;
+};
+
+type DataviewApi = {
+	query: (query: string, sourcePath?: string) => Promise<DataviewQueryResult>;
+};
+
+type DataviewPlugin = {
+	api: DataviewApi;
+};
+
+type DataviewTableResult = {
+	type: "table";
+	headers?: string[];
+	values?: unknown[][];
+};
+
+type DateWithToISO = {
+	toISODate: () => string | null | undefined;
+};
+
+const isGradientName = (value: unknown): value is ActivityGraphSettings["colorGradient"] => {
+	return value === "green" || value === "blue" || value === "purple" || value === "orange" || value === "red";
+};
+
+const isDataviewApi = (value: unknown): value is DataviewApi => {
+	return (
+		typeof value === "object" &&
+		value !== null &&
+		"query" in value &&
+		typeof (value as { query?: unknown }).query === "function"
+	);
+};
+
+const isDataviewPlugin = (value: unknown): value is DataviewPlugin => {
+	return (
+		typeof value === "object" &&
+		value !== null &&
+		"api" in value &&
+		isDataviewApi((value as { api?: unknown }).api)
+	);
+};
+
+const isDataviewTableResult = (value: unknown): value is DataviewTableResult => {
+	return (
+		typeof value === "object" &&
+		value !== null &&
+		(value as { type?: unknown }).type === "table"
+	);
+};
+
+const hasToISODate = (value: unknown): value is DateWithToISO => {
+	return (
+		typeof value === "object" &&
+		value !== null &&
+		"toISODate" in value &&
+		typeof (value as { toISODate?: unknown }).toISODate === "function"
+	);
 };
 
 export default class ActivityGraphPlugin extends Plugin {
@@ -26,7 +83,7 @@ export default class ActivityGraphPlugin extends Plugin {
 		this.registerMarkdownCodeBlockProcessor(
 			"activity-graph",
 			async (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
-				const dv = (this.app as any).plugins?.plugins?.dataview?.api;
+				const dv = this.getDataviewApi();
 				if (!dv) {
 					el.createEl("div", { text: "Dataview is required and is not enabled." });
 					return;
@@ -63,20 +120,67 @@ export default class ActivityGraphPlugin extends Plugin {
 	}
 
 	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		const data: unknown = await this.loadData();
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, this.normalizeSettings(data));
 	}
 
 	async saveSettings() {
 		await this.saveData(this.settings);
 	}
 
-	normalizeRows(tableResult: any): HeatmapRow[] {
-		if (!tableResult || tableResult.type !== "table") {
+	normalizeSettings(data: unknown): Partial<ActivityGraphSettings> {
+		if (!data || typeof data !== "object") {
+			return {};
+		}
+
+		const record = data as Record<string, unknown>;
+		const settings: Partial<ActivityGraphSettings> = {};
+
+		if (typeof record.daysToShow === "number" && record.daysToShow > 0) {
+			settings.daysToShow = record.daysToShow;
+		}
+		if (typeof record.showMonthLabels === "boolean") {
+			settings.showMonthLabels = record.showMonthLabels;
+		}
+		if (typeof record.showWeekdayLabels === "boolean") {
+			settings.showWeekdayLabels = record.showWeekdayLabels;
+		}
+		if (typeof record.showLegend === "boolean") {
+			settings.showLegend = record.showLegend;
+		}
+		if (typeof record.startWeekOnMonday === "boolean") {
+			settings.startWeekOnMonday = record.startWeekOnMonday;
+		}
+		if (typeof record.legendLessLabel === "string") {
+			settings.legendLessLabel = record.legendLessLabel;
+		}
+		if (typeof record.legendMoreLabel === "string") {
+			settings.legendMoreLabel = record.legendMoreLabel;
+		}
+		if (isGradientName(record.colorGradient)) {
+			settings.colorGradient = record.colorGradient;
+		}
+
+		return settings;
+	}
+
+	getDataviewApi(): DataviewApi | null {
+		const pluginsContainer = (this.app as unknown as { plugins?: { plugins?: Record<string, unknown> } })
+			.plugins;
+		const dataview = pluginsContainer?.plugins?.dataview;
+		if (!dataview || !isDataviewPlugin(dataview)) return null;
+		return dataview.api;
+	}
+
+	normalizeRows(tableResult: unknown): HeatmapRow[] {
+		if (!isDataviewTableResult(tableResult)) {
 			return [];
 		}
 
-		const headers: string[] = tableResult.headers ?? [];
-		const values: any[][] = tableResult.values ?? [];
+		const headers = Array.isArray(tableResult.headers)
+			? tableResult.headers.filter((header): header is string => typeof header === "string")
+			: [];
+		const values = Array.isArray(tableResult.values) ? tableResult.values : [];
 
 		const dateIndex = headers.findIndex((h) => h === "date");
 		const valueIndex = headers.findIndex((h) => h === "value");
@@ -88,6 +192,7 @@ export default class ActivityGraphPlugin extends Plugin {
 		const rows: HeatmapRow[] = [];
 
 		for (const row of values) {
+			if (!Array.isArray(row)) continue;
 			const rawDate = row[dateIndex];
 			const rawValue = row[valueIndex];
 
@@ -96,9 +201,11 @@ export default class ActivityGraphPlugin extends Plugin {
 			const dateString =
 				typeof rawDate === "string"
 					? rawDate
-					: typeof rawDate?.toISODate === "function"
-						? rawDate.toISODate()
-						: String(rawDate);
+					: rawDate instanceof Date
+						? this.toISODate(rawDate)
+						: hasToISODate(rawDate)
+							? rawDate.toISODate() ?? ""
+							: "";
 
 			const numValue = Number(rawValue ?? 0);
 			if (!dateString || Number.isNaN(numValue)) continue;
@@ -340,7 +447,7 @@ export default class ActivityGraphPlugin extends Plugin {
 					overrides.legendMoreLabel = String(value);
 					break;
 				case "colorGradient":
-					if (value === "green" || value === "blue" || value === "purple" || value === "orange" || value === "red") {
+					if (isGradientName(value)) {
 						overrides.colorGradient = value;
 					}
 					break;
