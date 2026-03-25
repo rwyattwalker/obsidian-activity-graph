@@ -78,6 +78,11 @@ Supported overrides:
   --file-line-width: 1000px;
   }
   ```
+## Upcoming Features
+- Optional absolute min and max settings (currently relative)
+- Custom color spectrum setting
+- Custom date range (currently only supports today - X days)
+- If you have a desired feature, let me know!
 
 ## Screenshots
 ### Query
