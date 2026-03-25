@@ -238,16 +238,23 @@ export default class ActivityGraphPlugin extends Plugin {
 			return;
 		}
 
-		const end = new Date(dates[dates.length - 1]!.getTime());
+		const end = new Date();
+		end.setHours(0, 0, 0, 0);
 		const start = new Date(end.getTime());
 		start.setDate(start.getDate() - (settings.daysToShow - 1));
+		const rangeStart = new Date(start.getTime());
 
 		const weekStart = settings.startWeekOnMonday ? 1 : 0;
 		const startDay = start.getDay();
 		const offset = (startDay - weekStart + 7) % 7;
 		start.setDate(start.getDate() - offset);
 
-		const maxValue = Math.max(...rows.map((r) => r.value), 1);
+		let maxValue = 1;
+		for (const row of rows) {
+			const rowDate = new Date(row.date + "T00:00:00");
+			if (rowDate < rangeStart || rowDate > end) continue;
+			if (row.value > maxValue) maxValue = row.value;
+		}
 
 		const root = container.createDiv({ cls: "activity-graph" });
 
@@ -339,7 +346,15 @@ export default class ActivityGraphPlugin extends Plugin {
 			root.style.setProperty("--activity-graph-cell-gap", `${gap}px`);
 		};
 
-		requestAnimationFrame(update);
+		const retry = (remaining: number) => {
+			update();
+			if (remaining <= 0) return;
+			if (!root.clientWidth) {
+				requestAnimationFrame(() => retry(remaining - 1));
+			}
+		};
+
+		retry(10);
 	}
 
 	renderMonthLabels(container: HTMLElement, start: Date, end: Date) {
