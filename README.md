@@ -9,7 +9,7 @@ Render a GitHub-style activity heatmap from Dataview queries. The defining featu
 
 ## Basic usage
 
-Use an `activity-graph` code block:
+Use an `activity-graph` code block containing a Dataview query:
 
 ```activity-graph
 TABLE file.day AS date, 1 AS value
