@@ -40,7 +40,7 @@ TABLE file.day AS date, duration AS value
 FROM "Exercise Logs"
 ```
 
-## Per-graph overrides
+## Per-query overrides
 
 Add a `---` block after the query:
 
