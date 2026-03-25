@@ -72,6 +72,12 @@ Supported overrides:
 - The graph ends on the latest date returned by the query and shows `daysToShow` days backwards.
 - Overrides are plain `key: value` lines following a `---`.
 - Supported gradients: `green`, `blue`, `purple`, `orange`, `red` (default: `green`).
+- The following css snippet can be added to allow more space for the graph, can look squished otherwise:
+  ```
+  body {
+  --file-line-width: 1000px;
+  }
+  ```
 
 ## Screenshots
 ### Query
