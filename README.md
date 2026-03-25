@@ -83,12 +83,16 @@ Supported overrides:
 ### Default Color Pallets
 #### Green
 <img width="1154" height="257" alt="image" src="https://github.com/user-attachments/assets/a2b41036-7938-469e-bb69-9193735764a7" />
+
 #### Blue
 <img width="1155" height="257" alt="image" src="https://github.com/user-attachments/assets/05f1d1f9-f168-47a4-b132-ddd2a6261d7b" />
+
 #### Purple
 <img width="1144" height="243" alt="image" src="https://github.com/user-attachments/assets/15b30cd0-22c1-4cbd-96f7-4be9b3d3f6fc" />
+
 #### Orange 
 <img width="1152" height="239" alt="image" src="https://github.com/user-attachments/assets/8349cda5-7875-4213-87fe-7c54c2c776d5" />
+
 #### Red
 <img width="1166" height="255" alt="image" src="https://github.com/user-attachments/assets/db35ce21-ab49-4c4c-9395-f8c39a7f3346" />
 
