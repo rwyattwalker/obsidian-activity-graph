@@ -216,8 +216,12 @@ export default class ActivityGraphPlugin extends Plugin {
 		return rows;
 	}
 
-	renderCalendar(container: HTMLElement, rows: HeatmapRow[], settings: ActivityGraphSettings,
-		title?: string) {
+	renderCalendar(
+		container: HTMLElement,
+		rows: HeatmapRow[],
+		settings: ActivityGraphSettings,
+		title?: string
+	) {
 		container.empty();
 
 		const valueMap = new Map<string, number>();
@@ -274,9 +278,11 @@ export default class ActivityGraphPlugin extends Plugin {
 		const weeksEl = body.createDiv({ cls: "activity-graph-weeks" });
 
 		const current = new Date(start.getTime());
+		let weekCount = 0;
 
 		while (current <= end) {
 			const weekEl = weeksEl.createDiv({ cls: "activity-graph-week" });
+			weekCount += 1;
 
 			for (let i = 0; i < 7; i++) {
 				if (current > end) break;
@@ -299,6 +305,41 @@ export default class ActivityGraphPlugin extends Plugin {
 		if (settings.showLegend) {
 			this.renderLegend(root);
 		}
+
+		this.applySizing(root, weekCount, settings.showWeekdayLabels);
+	}
+
+	applySizing(root: HTMLElement, weekCount: number, showWeekdayLabels: boolean) {
+		const labelWidth = showWeekdayLabels ? 32 : 0;
+		root.style.setProperty("--activity-graph-label-width", `${labelWidth}px`);
+
+		const minCell = 4;
+		const maxGap = 4;
+		const minGap = 1;
+
+		const update = () => {
+			if (weekCount <= 0) return;
+			const width = root.clientWidth;
+			if (!width) return;
+
+			const availableWidth = Math.max(width - labelWidth, 0);
+			let gap = maxGap;
+			let cellSize = Math.floor((availableWidth - (weekCount - 1) * gap) / weekCount);
+
+			if (cellSize < minCell) {
+				gap = minGap;
+				cellSize = Math.floor((availableWidth - (weekCount - 1) * gap) / weekCount);
+			}
+
+			if (cellSize < minCell) {
+				cellSize = minCell;
+			}
+
+			root.style.setProperty("--activity-graph-cell-size", `${cellSize}px`);
+			root.style.setProperty("--activity-graph-cell-gap", `${gap}px`);
+		};
+
+		requestAnimationFrame(update);
 	}
 
 	renderMonthLabels(container: HTMLElement, start: Date, end: Date) {
