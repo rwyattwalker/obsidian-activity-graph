@@ -6,6 +6,5 @@
 	"description": "Render activity heatmaps from Dataview query results.",
 	"author": "Wyatt Walker",
 	"authorUrl": "https://github.com/rwyattwalker",
-	"fundingUrl": "https://github.com/sponsors/rwyattwalker",
 	"isDesktopOnly": false
 }
