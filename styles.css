@@ -15,6 +15,7 @@
 	align-items: flex-end;
 	margin-bottom: 6px;
 	width: 100%;
+	justify-content: center;
 }
 
 .activity-graph-month-spacer {
@@ -64,6 +65,7 @@
 	gap: var(--activity-graph-cell-gap);
 	align-items: flex-start;
 	flex: 1 1 auto;
+	justify-content: center;
 }
 
 .activity-graph-week {
