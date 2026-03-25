@@ -1,6 +1,6 @@
 # Activity Graph
 
-Render a GitHub-style activity heatmap from Dataview queries. The defining feature is that you write native Dataview queries directly (no custom DSL).
+Render a GitHub-style activity heatmap from Dataview queries. Use Dataview queries directly with optional query level setting overrides.
 
 ## Requirements
 
