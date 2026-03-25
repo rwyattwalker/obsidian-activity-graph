@@ -74,5 +74,10 @@ Supported overrides:
 - Supported gradients: `green`, `blue`, `purple`, `orange`, `red` (default: `green`).
 
 ## Screenshots
+### Query
+<img width="984" height="393" alt="image" src="https://github.com/user-attachments/assets/5d8aa846-905a-475f-b900-74d23d85bfea" />
 
+### Result
 <img width="1200" height="492" alt="activity graph desktop" src="https://github.com/user-attachments/assets/f8263d6a-ddc3-4bf1-9e0e-d68cd5c2b0d3" />
+
+### Default Color Pallets
