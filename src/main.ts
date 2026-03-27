@@ -83,6 +83,16 @@ const hasToISODate = (value: unknown): value is DateWithToISO => {
 	);
 };
 
+const toGradientPalette = (value: unknown): GradientPalette | null => {
+	if (!Array.isArray(value) || value.length !== 4) return null;
+	if (!value.every((color): color is string => typeof color === "string" && color.trim().length > 0)) {
+		return null;
+	}
+	const [first, second, third, fourth] = value;
+	if (!first || !second || !third || !fourth) return null;
+	return [first, second, third, fourth];
+};
+
 export default class ActivityGraphPlugin extends Plugin {
 	settings: ActivityGraphSettings;
 
@@ -192,9 +202,9 @@ export default class ActivityGraphPlugin extends Plugin {
 
 		for (const [name, palette] of Object.entries(record)) {
 			if (typeof name !== "string") continue;
-			if (!Array.isArray(palette) || palette.length !== 4) continue;
-			if (!palette.every((color) => typeof color === "string" && color.trim().length > 0)) continue;
-			normalized[name] = [palette[0], palette[1], palette[2], palette[3]];
+			const normalizedPalette = toGradientPalette(palette);
+			if (!normalizedPalette) continue;
+			normalized[name] = normalizedPalette;
 		}
 
 		return normalized;
