@@ -39,6 +39,8 @@ npm run build
 - To use eslint to analyze this project use this command: `eslint main.ts`
 - eslint will then create a report with suggestions for code improvement by file and line number.
 - If your source code is in a folder, such as `src`, you can use eslint with this command to analyze all files in that folder: `eslint ./src/`
+- Lint rules enforce sentence case for user-facing UI text and placeholders; prefer lower-case sentence case (for example, "Week starts on monday", "Less label", "Relative").
+- Avoid unnecessary type assertions; prefer proper type guards to satisfy `@typescript-eslint/no-unnecessary-type-assertion`.
 
 ## File & folder conventions
 

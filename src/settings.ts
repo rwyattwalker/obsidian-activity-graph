@@ -163,7 +163,7 @@ export class ActivityGraphSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-			.setName('"Less" label')
+			.setName("Less label")
 			.addText((text) =>
 				text
 					.setValue(this.plugin.settings.legendLessLabel)
@@ -174,7 +174,7 @@ export class ActivityGraphSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-			.setName('"More" label')
+			.setName("More label")
 			.addText((text) =>
 				text
 					.setValue(this.plugin.settings.legendMoreLabel)
@@ -189,12 +189,12 @@ export class ActivityGraphSettingTab extends PluginSettingTab {
 		new Setting(containerEl)
 			.setName("Minimum value")
 			.setDesc("Leave blank to keep the scale relative to the data.")
-			.addText((text) =>
-				text
-					.setPlaceholder("relative")
-					.setValue(this.plugin.settings.scaleMin === null ? "" : String(this.plugin.settings.scaleMin))
-					.onChange(async (value) => {
-						this.plugin.settings.scaleMin = parseNumberOrNull(value);
+				.addText((text) =>
+					text
+						.setPlaceholder("Relative")
+						.setValue(this.plugin.settings.scaleMin === null ? "" : String(this.plugin.settings.scaleMin))
+						.onChange(async (value) => {
+							this.plugin.settings.scaleMin = parseNumberOrNull(value);
 						await this.plugin.saveSettings();
 					})
 			);
@@ -202,12 +202,12 @@ export class ActivityGraphSettingTab extends PluginSettingTab {
 		new Setting(containerEl)
 			.setName("Maximum value")
 			.setDesc("Leave blank to keep the scale relative to the data.")
-			.addText((text) =>
-				text
-					.setPlaceholder("relative")
-					.setValue(this.plugin.settings.scaleMax === null ? "" : String(this.plugin.settings.scaleMax))
-					.onChange(async (value) => {
-						this.plugin.settings.scaleMax = parseNumberOrNull(value);
+				.addText((text) =>
+					text
+						.setPlaceholder("Relative")
+						.setValue(this.plugin.settings.scaleMax === null ? "" : String(this.plugin.settings.scaleMax))
+						.onChange(async (value) => {
+							this.plugin.settings.scaleMax = parseNumberOrNull(value);
 						await this.plugin.saveSettings();
 					})
 			);
@@ -219,13 +219,13 @@ export class ActivityGraphSettingTab extends PluginSettingTab {
 			.setDesc("Default heatmap color theme")
 			.addDropdown((dropdown) =>
 				dropdown
-					.addOptions(getGradientOptions(this.plugin.settings.customGradients))
-					.setValue(this.plugin.settings.colorGradient)
-					.onChange(async (value) => {
-						this.plugin.settings.colorGradient = value as GradientName;
-						renderGradientPreview(this.plugin.settings.colorGradient);
-						await this.plugin.saveSettings();
-					})
+						.addOptions(getGradientOptions(this.plugin.settings.customGradients))
+						.setValue(this.plugin.settings.colorGradient)
+						.onChange(async (value) => {
+							this.plugin.settings.colorGradient = value;
+							renderGradientPreview(this.plugin.settings.colorGradient);
+							await this.plugin.saveSettings();
+						})
 			);
 
 		const previewEl = gradientSetting.controlEl.createDiv({
@@ -260,12 +260,12 @@ export class ActivityGraphSettingTab extends PluginSettingTab {
 		new Setting(containerEl)
 			.setName("Add custom palette")
 			.setDesc("Provide a name and four CSS colors (comma or space separated).")
-			.addText((text) =>
-				text
-					.setPlaceholder("my-palette")
-					.onChange((value) => {
-						newPaletteName = value;
-					})
+				.addText((text) =>
+					text
+						.setPlaceholder("My palette")
+						.onChange((value) => {
+							newPaletteName = value;
+						})
 			)
 			.addText((text) =>
 				text
