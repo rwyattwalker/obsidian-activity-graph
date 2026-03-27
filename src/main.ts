@@ -1,5 +1,11 @@
 import { MarkdownPostProcessorContext, Plugin } from "obsidian";
-import { ActivityGraphSettingTab, ActivityGraphSettings, DEFAULT_SETTINGS, GRADIENTS } from "settings";
+import {
+	ActivityGraphSettingTab,
+	ActivityGraphSettings,
+	DEFAULT_SETTINGS,
+	GRADIENTS,
+	GradientPalette,
+} from "settings";
 
 type HeatmapRow = {
 	date: string;
@@ -34,8 +40,12 @@ type DateWithToISO = {
 	toISODate: () => string | null | undefined;
 };
 
-const isGradientName = (value: unknown): value is ActivityGraphSettings["colorGradient"] => {
-	return value === "green" || value === "blue" || value === "purple" || value === "orange" || value === "red";
+const isGradientName = (
+	value: unknown,
+	customGradients: Record<string, GradientPalette>
+): value is ActivityGraphSettings["colorGradient"] => {
+	if (typeof value !== "string") return false;
+	return value in GRADIENTS || value in customGradients;
 };
 
 const isDataviewApi = (value: unknown): value is DataviewApi => {
@@ -135,6 +145,10 @@ export default class ActivityGraphPlugin extends Plugin {
 
 		const record = data as Record<string, unknown>;
 		const settings: Partial<ActivityGraphSettings> = {};
+		const customGradients = this.normalizeCustomGradients(record.customGradients);
+		if (Object.keys(customGradients).length > 0) {
+			settings.customGradients = customGradients;
+		}
 
 		if (typeof record.daysToShow === "number" && record.daysToShow > 0) {
 			settings.daysToShow = record.daysToShow;
@@ -157,11 +171,33 @@ export default class ActivityGraphPlugin extends Plugin {
 		if (typeof record.legendMoreLabel === "string") {
 			settings.legendMoreLabel = record.legendMoreLabel;
 		}
-		if (isGradientName(record.colorGradient)) {
+		if (typeof record.scaleMin === "number" || record.scaleMin === null) {
+			settings.scaleMin = typeof record.scaleMin === "number" ? record.scaleMin : null;
+		}
+		if (typeof record.scaleMax === "number" || record.scaleMax === null) {
+			settings.scaleMax = typeof record.scaleMax === "number" ? record.scaleMax : null;
+		}
+		if (isGradientName(record.colorGradient, settings.customGradients ?? {})) {
 			settings.colorGradient = record.colorGradient;
 		}
 
 		return settings;
+	}
+
+	normalizeCustomGradients(value: unknown): Record<string, GradientPalette> {
+		if (!value || typeof value !== "object") return {};
+
+		const record = value as Record<string, unknown>;
+		const normalized: Record<string, GradientPalette> = {};
+
+		for (const [name, palette] of Object.entries(record)) {
+			if (typeof name !== "string") continue;
+			if (!Array.isArray(palette) || palette.length !== 4) continue;
+			if (!palette.every((color) => typeof color === "string" && color.trim().length > 0)) continue;
+			normalized[name] = [palette[0], palette[1], palette[2], palette[3]];
+		}
+
+		return normalized;
 	}
 
 	getDataviewApi(): DataviewApi | null {
@@ -256,6 +292,12 @@ export default class ActivityGraphPlugin extends Plugin {
 			if (row.value > maxValue) maxValue = row.value;
 		}
 
+		const scaleMin = settings.scaleMin ?? 0;
+		let scaleMax = settings.scaleMax ?? maxValue;
+		if (scaleMax <= scaleMin) {
+			scaleMax = scaleMin + 1;
+		}
+
 		const root = container.createDiv({ cls: "activity-graph" });
 
 		if (title) {
@@ -265,7 +307,10 @@ export default class ActivityGraphPlugin extends Plugin {
 			});
 		}
 
-		const gradient = GRADIENTS[settings.colorGradient] ?? GRADIENTS.green;
+		const gradient =
+			settings.customGradients[settings.colorGradient] ??
+			GRADIENTS[settings.colorGradient as keyof typeof GRADIENTS] ??
+			GRADIENTS.green;
 
 		root.style.setProperty("--heatmap-1", gradient[0]);
 		root.style.setProperty("--heatmap-2", gradient[1]);
@@ -279,7 +324,7 @@ export default class ActivityGraphPlugin extends Plugin {
 		const body = root.createDiv({ cls: "activity-graph-body" });
 
 		if (settings.showWeekdayLabels) {
-			this.renderWeekdayLabels(body);
+			this.renderWeekdayLabels(body, settings);
 		}
 
 		const weeksEl = body.createDiv({ cls: "activity-graph-weeks" });
@@ -296,7 +341,7 @@ export default class ActivityGraphPlugin extends Plugin {
 
 				const iso = this.toISODate(current);
 				const value = valueMap.get(iso) ?? 0;
-				const level = this.getLevel(value, maxValue);
+				const level = this.getLevel(value, scaleMin, scaleMax);
 
 				const cell = weekEl.createDiv({
 					cls: `activity-graph-cell level-${level}`,
@@ -310,7 +355,7 @@ export default class ActivityGraphPlugin extends Plugin {
 		}
 
 		if (settings.showLegend) {
-			this.renderLegend(root);
+			this.renderLegend(root, settings);
 		}
 
 		this.applySizing(root, weekCount, settings.showWeekdayLabels);
@@ -385,10 +430,10 @@ export default class ActivityGraphPlugin extends Plugin {
 		}
 	}
 
-	renderWeekdayLabels(container: HTMLElement) {
+	renderWeekdayLabels(container: HTMLElement, settings: ActivityGraphSettings) {
 		const labelsEl = container.createDiv({ cls: "activity-graph-weekday-labels" });
 
-		const labels = this.settings.startWeekOnMonday
+		const labels = settings.startWeekOnMonday
 			? ["Mon", "", "Wed", "", "Fri", "", ""]
 			: ["Sun", "", "Tue", "", "Thu", "", "Sat"];
 
@@ -398,11 +443,11 @@ export default class ActivityGraphPlugin extends Plugin {
 		}
 	}
 
-	renderLegend(container: HTMLElement) {
+	renderLegend(container: HTMLElement, settings: ActivityGraphSettings) {
 		const legend = container.createDiv({ cls: "activity-graph-legend" });
 
 		legend.createSpan({
-			text: this.settings.legendLessLabel,
+			text: settings.legendLessLabel,
 			cls: "activity-graph-legend-text",
 		});
 
@@ -413,20 +458,19 @@ export default class ActivityGraphPlugin extends Plugin {
 		}
 
 		legend.createSpan({
-			text: this.settings.legendMoreLabel,
+			text: settings.legendMoreLabel,
 			cls: "activity-graph-legend-text",
 		});
 	}
 
-	getLevel(value: number, maxValue: number): number {
-		if (value <= 0) return 0;
+	getLevel(value: number, minValue: number, maxValue: number): number {
+		if (value <= minValue) return 0;
+		if (value >= maxValue) return 4;
 
-		const ratio = value / maxValue;
-
-		if (ratio <= 0.25) return 1;
-		if (ratio <= 0.5) return 2;
-		if (ratio <= 0.75) return 3;
-		return 4;
+		const ratio = (value - minValue) / (maxValue - minValue);
+		if (ratio <= 1 / 3) return 1;
+		if (ratio <= 2 / 3) return 2;
+		return 3;
 	}
 
 	toISODate(date: Date): string {
@@ -471,10 +515,11 @@ export default class ActivityGraphPlugin extends Plugin {
 			const key = line.slice(0, colonIndex).trim();
 			const rawValue = line.slice(colonIndex + 1).trim();
 
-			let value: string | number | boolean = rawValue;
+			let value: string | number | boolean | null = rawValue;
 
 			if (rawValue === "true") value = true;
 			else if (rawValue === "false") value = false;
+			else if (rawValue === "null") value = null;
 			else if (!Number.isNaN(Number(rawValue)) && rawValue !== "") value = Number(rawValue);
 
 			switch (key) {
@@ -497,15 +542,27 @@ export default class ActivityGraphPlugin extends Plugin {
 					if (typeof value === "boolean") overrides.startWeekOnMonday = value;
 					break;
 				case "legendLessLabel":
+				case "lessLabel":
 					overrides.legendLessLabel = String(value);
 					break;
 				case "legendMoreLabel":
+				case "moreLabel":
 					overrides.legendMoreLabel = String(value);
 					break;
 				case "colorGradient":
-					if (isGradientName(value)) {
+					if (isGradientName(value, this.settings.customGradients)) {
 						overrides.colorGradient = value;
 					}
+					break;
+				case "scaleMin":
+				case "minValue":
+					if (typeof value === "number") overrides.scaleMin = value;
+					if (value === null) overrides.scaleMin = null;
+					break;
+				case "scaleMax":
+				case "maxValue":
+					if (typeof value === "number") overrides.scaleMax = value;
+					if (value === null) overrides.scaleMax = null;
 					break;
 			}
 		}

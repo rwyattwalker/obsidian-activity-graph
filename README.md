@@ -53,6 +53,10 @@ title: Exercise
 daysToShow: 90
 showLegend: false
 colorGradient: purple
+minValue: 0
+maxValue: 3
+lessLabel: 0
+moreLabel: 3+
 ```
 
 Supported overrides:
@@ -64,14 +68,17 @@ Supported overrides:
 - showLegend
 - startWeekOnMonday
 - colorGradient
-- legendLessLabel
-- legendMoreLabel
+- lessLabel
+- moreLabel
+- minValue
+- maxValue
 
 ## Notes
 
 - The graph ends on today's date (local time) and shows `daysToShow` days backwards.
 - Overrides are plain `key: value` lines following a `---`.
-- Supported gradients: `green`, `blue`, `purple`, `orange`, `red` (default: `green`).
+- Supported gradients: `green`, `blue`, `purple`, `orange`, `red`, plus any custom palettes you add in settings (default: `green`).
+- `minValue`/`maxValue` let you lock the heatmap scale; leave blank in settings (or omit in overrides) to keep it relative.
 - The following css snippet can be added to allow more space for the graph, can look squished otherwise:
   ```
   body {
@@ -79,8 +86,6 @@ Supported overrides:
   }
   ```
 ## Upcoming Features
-- Optional absolute min and max settings (currently relative)
-- Custom color spectrum setting
 - Custom date range (currently only supports today - X days)
 - If you have a desired feature, let me know!
 
@@ -106,6 +111,3 @@ Supported overrides:
 
 #### Red
 <img width="1166" height="255" alt="image" src="https://github.com/user-attachments/assets/db35ce21-ab49-4c4c-9395-f8c39a7f3346" />
-
-
-
