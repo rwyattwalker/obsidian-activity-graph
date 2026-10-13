@@ -1,4 +1,9 @@
-import { MarkdownPostProcessorContext, Plugin } from "obsidian";
+import {
+	type Events,
+	MarkdownPostProcessorContext,
+	MarkdownRenderChild,
+	Plugin,
+} from "obsidian";
 import {
 	ActivityGraphSettingTab,
 	ActivityGraphSettings,
@@ -24,6 +29,9 @@ type DataviewQueryResult = {
 
 type DataviewApi = {
 	query: (query: string, sourcePath?: string) => Promise<DataviewQueryResult>;
+	index: {
+		initialized: boolean;
+	};
 };
 
 type DataviewPlugin = {
@@ -42,7 +50,7 @@ type DateWithToISO = {
 
 const isGradientName = (
 	value: unknown,
-	customGradients: Record<string, GradientPalette>
+	customGradients: Record<string, GradientPalette>,
 ): value is ActivityGraphSettings["colorGradient"] => {
 	if (typeof value !== "string") return false;
 	return value in GRADIENTS || value in customGradients;
@@ -66,7 +74,9 @@ const isDataviewPlugin = (value: unknown): value is DataviewPlugin => {
 	);
 };
 
-const isDataviewTableResult = (value: unknown): value is DataviewTableResult => {
+const isDataviewTableResult = (
+	value: unknown,
+): value is DataviewTableResult => {
 	return (
 		typeof value === "object" &&
 		value !== null &&
@@ -85,7 +95,12 @@ const hasToISODate = (value: unknown): value is DateWithToISO => {
 
 const toGradientPalette = (value: unknown): GradientPalette | null => {
 	if (!Array.isArray(value) || value.length !== 4) return null;
-	if (!value.every((color): color is string => typeof color === "string" && color.trim().length > 0)) {
+	if (
+		!value.every(
+			(color): color is string =>
+				typeof color === "string" && color.trim().length > 0,
+		)
+	) {
 		return null;
 	}
 	const [first, second, third, fourth] = value;
@@ -99,49 +114,97 @@ export default class ActivityGraphPlugin extends Plugin {
 	async onload() {
 		await this.loadSettings();
 		this.addSettingTab(new ActivityGraphSettingTab(this.app, this));
-
 		this.registerMarkdownCodeBlockProcessor(
 			"activity-graph",
-			async (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
-				const dv = this.getDataviewApi();
-				if (!dv) {
-					el.createEl("div", { text: "Dataview is required and is not enabled." });
-					return;
-				}
+			(
+				source: string,
+				el: HTMLElement,
+				ctx: MarkdownPostProcessorContext,
+			) => {
+				let disposed = false;
+				let generation = 0;
 
-				try {
+				const render = async () => {
+					const current = ++generation;
+					const dv = this.getDataviewApi();
 
-					const { query, overrides } = this.parseBlock(source);
-					const settings = { ...this.settings, ...overrides };
+					if (!dv || !dv.index.initialized) {
+						el.setText("Waiting for dataview...");
+						return;
+					}
 
-					const result = await dv.query(query, ctx.sourcePath);
+					try {
+						const { query, overrides } = this.parseBlock(source);
+						const settings = { ...this.settings, ...overrides };
+						const result = await dv.query(query, ctx.sourcePath);
 
-					if (!result || result.successful === false) {
+						if (disposed || current !== generation) return;
+
+						el.empty();
+
+						if (!result.successful) {
+							el.createEl("pre", {
+								text: `Dataview query failed:\n${result.error ?? "Unknown error"}`,
+							});
+							return;
+						}
+
+						const rows = this.normalizeRows(result.value);
+
+						if (!rows.length) {
+							el.setText("No results.");
+							return;
+						}
+
+						this.renderCalendar(
+							el,
+							rows,
+							settings,
+							overrides.title,
+						);
+					} catch (err) {
+						if (disposed || current !== generation) return;
+
+						el.empty();
 						el.createEl("pre", {
-							text: `Dataview query failed:\n${result?.error ?? "Unknown error"}`,
+							text: `Plugin error:\n${String(err)}`,
 						});
-						return;
 					}
+				};
 
-					const rows = this.normalizeRows(result.value);
-					if (!rows.length) {
-						el.createEl("div", { text: "No results." });
-						return;
-					}
+				const refresh = () => {
+					void render();
+				};
 
-					this.renderCalendar(el, rows, settings, overrides.title);
-				} catch (err) {
-					el.createEl("pre", {
-						text: `Plugin error:\n${err instanceof Error ? err.message : String(err)}`,
-					});
-				}
-			}
+				const metadataEvents: Events = this.app.metadataCache;
+				const readyRef = metadataEvents.on(
+					"dataview:index-ready",
+					refresh,
+				);
+
+				// Clean up when Obsidian removes this rendered code block.
+				ctx.addChild(
+					new (class extends MarkdownRenderChild {
+						onunload() {
+							disposed = true;
+							generation++;
+							metadataEvents.offref(readyRef);
+						}
+					})(el),
+				);
+
+				refresh();
+			},
 		);
 	}
 
 	async loadSettings() {
 		const data: unknown = await this.loadData();
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, this.normalizeSettings(data));
+		this.settings = Object.assign(
+			{},
+			DEFAULT_SETTINGS,
+			this.normalizeSettings(data),
+		);
 	}
 
 	async saveSettings() {
@@ -155,7 +218,9 @@ export default class ActivityGraphPlugin extends Plugin {
 
 		const record = data as Record<string, unknown>;
 		const settings: Partial<ActivityGraphSettings> = {};
-		const customGradients = this.normalizeCustomGradients(record.customGradients);
+		const customGradients = this.normalizeCustomGradients(
+			record.customGradients,
+		);
 		if (Object.keys(customGradients).length > 0) {
 			settings.customGradients = customGradients;
 		}
@@ -182,12 +247,16 @@ export default class ActivityGraphPlugin extends Plugin {
 			settings.legendMoreLabel = record.legendMoreLabel;
 		}
 		if (typeof record.scaleMin === "number" || record.scaleMin === null) {
-			settings.scaleMin = typeof record.scaleMin === "number" ? record.scaleMin : null;
+			settings.scaleMin =
+				typeof record.scaleMin === "number" ? record.scaleMin : null;
 		}
 		if (typeof record.scaleMax === "number" || record.scaleMax === null) {
-			settings.scaleMax = typeof record.scaleMax === "number" ? record.scaleMax : null;
+			settings.scaleMax =
+				typeof record.scaleMax === "number" ? record.scaleMax : null;
 		}
-		if (isGradientName(record.colorGradient, settings.customGradients ?? {})) {
+		if (
+			isGradientName(record.colorGradient, settings.customGradients ?? {})
+		) {
 			settings.colorGradient = record.colorGradient;
 		}
 
@@ -211,8 +280,11 @@ export default class ActivityGraphPlugin extends Plugin {
 	}
 
 	getDataviewApi(): DataviewApi | null {
-		const pluginsContainer = (this.app as unknown as { plugins?: { plugins?: Record<string, unknown> } })
-			.plugins;
+		const pluginsContainer = (
+			this.app as unknown as {
+				plugins?: { plugins?: Record<string, unknown> };
+			}
+		).plugins;
 		const dataview = pluginsContainer?.plugins?.dataview;
 		if (!dataview || !isDataviewPlugin(dataview)) return null;
 		return dataview.api;
@@ -224,9 +296,13 @@ export default class ActivityGraphPlugin extends Plugin {
 		}
 
 		const headers = Array.isArray(tableResult.headers)
-			? tableResult.headers.filter((header): header is string => typeof header === "string")
+			? tableResult.headers.filter(
+					(header): header is string => typeof header === "string",
+				)
 			: [];
-		const values = Array.isArray(tableResult.values) ? tableResult.values : [];
+		const values = Array.isArray(tableResult.values)
+			? tableResult.values
+			: [];
 
 		const dateIndex = headers.findIndex((h) => h === "date");
 		const valueIndex = headers.findIndex((h) => h === "value");
@@ -250,7 +326,7 @@ export default class ActivityGraphPlugin extends Plugin {
 					: rawDate instanceof Date
 						? this.toISODate(rawDate)
 						: hasToISODate(rawDate)
-							? rawDate.toISODate() ?? ""
+							? (rawDate.toISODate() ?? "")
 							: "";
 
 			const numValue = Number(rawValue ?? 0);
@@ -266,7 +342,7 @@ export default class ActivityGraphPlugin extends Plugin {
 		container: HTMLElement,
 		rows: HeatmapRow[],
 		settings: ActivityGraphSettings,
-		title?: string
+		title?: string,
 	) {
 		container.empty();
 
@@ -371,9 +447,16 @@ export default class ActivityGraphPlugin extends Plugin {
 		this.applySizing(root, weekCount, settings.showWeekdayLabels);
 	}
 
-	applySizing(root: HTMLElement, weekCount: number, showWeekdayLabels: boolean) {
+	applySizing(
+		root: HTMLElement,
+		weekCount: number,
+		showWeekdayLabels: boolean,
+	) {
 		const labelWidth = showWeekdayLabels ? 32 : 0;
-		root.style.setProperty("--activity-graph-label-width", `${labelWidth}px`);
+		root.style.setProperty(
+			"--activity-graph-label-width",
+			`${labelWidth}px`,
+		);
 
 		const minCell = 4;
 		const maxGap = 4;
@@ -386,18 +469,25 @@ export default class ActivityGraphPlugin extends Plugin {
 
 			const availableWidth = Math.max(width - labelWidth, 0);
 			let gap = maxGap;
-			let cellSize = Math.floor((availableWidth - (weekCount - 1) * gap) / weekCount);
+			let cellSize = Math.floor(
+				(availableWidth - (weekCount - 1) * gap) / weekCount,
+			);
 
 			if (cellSize < minCell) {
 				gap = minGap;
-				cellSize = Math.floor((availableWidth - (weekCount - 1) * gap) / weekCount);
+				cellSize = Math.floor(
+					(availableWidth - (weekCount - 1) * gap) / weekCount,
+				);
 			}
 
 			if (cellSize < minCell) {
 				cellSize = minCell;
 			}
 
-			root.style.setProperty("--activity-graph-cell-size", `${cellSize}px`);
+			root.style.setProperty(
+				"--activity-graph-cell-size",
+				`${cellSize}px`,
+			);
 			root.style.setProperty("--activity-graph-cell-gap", `${gap}px`);
 		};
 
@@ -414,10 +504,14 @@ export default class ActivityGraphPlugin extends Plugin {
 
 	renderMonthLabels(container: HTMLElement, start: Date, end: Date) {
 		const monthRow = container.createDiv({ cls: "activity-graph-months" });
-		const spacer = monthRow.createDiv({ cls: "activity-graph-month-spacer" });
+		const spacer = monthRow.createDiv({
+			cls: "activity-graph-month-spacer",
+		});
 		spacer.setText("");
 
-		const monthsEl = monthRow.createDiv({ cls: "activity-graph-month-labels" });
+		const monthsEl = monthRow.createDiv({
+			cls: "activity-graph-month-labels",
+		});
 
 		const current = new Date(start.getTime());
 		let lastMonth = -1;
@@ -426,13 +520,17 @@ export default class ActivityGraphPlugin extends Plugin {
 			const month = current.getMonth();
 
 			if (month !== lastMonth) {
-				const label = monthsEl.createDiv({ cls: "activity-graph-month-label" });
+				const label = monthsEl.createDiv({
+					cls: "activity-graph-month-label",
+				});
 				label.setText(
-					current.toLocaleString(undefined, { month: "short" })
+					current.toLocaleString(undefined, { month: "short" }),
 				);
 				lastMonth = month;
 			} else {
-				const spacerCell = monthsEl.createDiv({ cls: "activity-graph-month-label activity-graph-month-label--empty" });
+				const spacerCell = monthsEl.createDiv({
+					cls: "activity-graph-month-label activity-graph-month-label--empty",
+				});
 				spacerCell.setText("");
 			}
 
@@ -440,15 +538,22 @@ export default class ActivityGraphPlugin extends Plugin {
 		}
 	}
 
-	renderWeekdayLabels(container: HTMLElement, settings: ActivityGraphSettings) {
-		const labelsEl = container.createDiv({ cls: "activity-graph-weekday-labels" });
+	renderWeekdayLabels(
+		container: HTMLElement,
+		settings: ActivityGraphSettings,
+	) {
+		const labelsEl = container.createDiv({
+			cls: "activity-graph-weekday-labels",
+		});
 
 		const labels = settings.startWeekOnMonday
 			? ["Mon", "", "Wed", "", "Fri", "", ""]
 			: ["Sun", "", "Tue", "", "Thu", "", "Sat"];
 
 		for (const label of labels) {
-			const labelEl = labelsEl.createDiv({ cls: "activity-graph-weekday-label" });
+			const labelEl = labelsEl.createDiv({
+				cls: "activity-graph-weekday-label",
+			});
 			labelEl.setText(label);
 		}
 	}
@@ -530,7 +635,8 @@ export default class ActivityGraphPlugin extends Plugin {
 			if (rawValue === "true") value = true;
 			else if (rawValue === "false") value = false;
 			else if (rawValue === "null") value = null;
-			else if (!Number.isNaN(Number(rawValue)) && rawValue !== "") value = Number(rawValue);
+			else if (!Number.isNaN(Number(rawValue)) && rawValue !== "")
+				value = Number(rawValue);
 
 			switch (key) {
 				case "title":
@@ -540,16 +646,20 @@ export default class ActivityGraphPlugin extends Plugin {
 					if (typeof value === "number") overrides.daysToShow = value;
 					break;
 				case "showMonthLabels":
-					if (typeof value === "boolean") overrides.showMonthLabels = value;
+					if (typeof value === "boolean")
+						overrides.showMonthLabels = value;
 					break;
 				case "showWeekdayLabels":
-					if (typeof value === "boolean") overrides.showWeekdayLabels = value;
+					if (typeof value === "boolean")
+						overrides.showWeekdayLabels = value;
 					break;
 				case "showLegend":
-					if (typeof value === "boolean") overrides.showLegend = value;
+					if (typeof value === "boolean")
+						overrides.showLegend = value;
 					break;
 				case "startWeekOnMonday":
-					if (typeof value === "boolean") overrides.startWeekOnMonday = value;
+					if (typeof value === "boolean")
+						overrides.startWeekOnMonday = value;
 					break;
 				case "legendLessLabel":
 				case "lessLabel":
