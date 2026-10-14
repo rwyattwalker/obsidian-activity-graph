@@ -1,6 +1,6 @@
 {
 	"name": "activity-graph",
-	"version": "1.1.0",
+	"version": "1.2.0",
 	"description": "Activity graph plugin for Obsidian (https://obsidian.md)",
 	"main": "main.js",
 	"type": "module",
