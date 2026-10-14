@@ -1,5 +1,5 @@
 import { App, Notice, PluginSettingTab, Setting } from "obsidian";
-import ActivityGraphPlugin from "./main";
+import type ActivityGraphPlugin from "./main";
 
 export type GradientPalette = [string, string, string, string];
 type BuiltInGradientName = "green" | "blue" | "purple" | "orange" | "red";
@@ -39,6 +39,93 @@ export const GRADIENTS: Record<BuiltInGradientName, GradientPalette> = {
 	purple: ["#2a1f45", "#4b3673", "#7b5fb6", "#bb9af7"], // purple accent
 	orange: ["#33231a", "#66442c", "#9c6a4a", "#ff9e64"], // orange accent
 	red: ["#331a1a", "#662c2c", "#9c4a4a", "#f7768e"], // red accent
+};
+
+export const isGradientName = (
+	value: unknown,
+	customGradients: Record<string, GradientPalette>,
+): value is ActivityGraphSettings["colorGradient"] => {
+	if (typeof value !== "string") return false;
+	return value in GRADIENTS || value in customGradients;
+};
+
+const toGradientPalette = (value: unknown): GradientPalette | null => {
+	if (!Array.isArray(value) || value.length !== 4) return null;
+	if (
+		!value.every(
+			(color): color is string =>
+				typeof color === "string" && color.trim().length > 0,
+		)
+	) {
+		return null;
+	}
+	const [first, second, third, fourth] = value;
+	if (!first || !second || !third || !fourth) return null;
+	return [first, second, third, fourth];
+};
+
+const normalizeCustomGradients = (
+	value: unknown,
+): Record<string, GradientPalette> => {
+	if (!value || typeof value !== "object") return {};
+
+	const normalized: Record<string, GradientPalette> = {};
+
+	for (const [name, palette] of Object.entries(value)) {
+		const normalizedPalette = toGradientPalette(palette);
+		if (!normalizedPalette) continue;
+		normalized[name] = normalizedPalette;
+	}
+
+	return normalized;
+};
+
+export const normalizeSettings = (data: unknown): ActivityGraphSettings => {
+	if (!data || typeof data !== "object") {
+		return { ...DEFAULT_SETTINGS, customGradients: {} };
+	}
+
+	const record = data as Record<string, unknown>;
+	const customGradients = normalizeCustomGradients(record.customGradients);
+	const settings: ActivityGraphSettings = {
+		...DEFAULT_SETTINGS,
+		customGradients,
+	};
+
+	if (typeof record.daysToShow === "number" && record.daysToShow > 0) {
+		settings.daysToShow = record.daysToShow;
+	}
+	if (typeof record.showMonthLabels === "boolean") {
+		settings.showMonthLabels = record.showMonthLabels;
+	}
+	if (typeof record.showWeekdayLabels === "boolean") {
+		settings.showWeekdayLabels = record.showWeekdayLabels;
+	}
+	if (typeof record.showLegend === "boolean") {
+		settings.showLegend = record.showLegend;
+	}
+	if (typeof record.startWeekOnMonday === "boolean") {
+		settings.startWeekOnMonday = record.startWeekOnMonday;
+	}
+	if (typeof record.legendLessLabel === "string") {
+		settings.legendLessLabel = record.legendLessLabel;
+	}
+	if (typeof record.legendMoreLabel === "string") {
+		settings.legendMoreLabel = record.legendMoreLabel;
+	}
+	if (typeof record.scaleMin === "number" || record.scaleMin === null) {
+		settings.scaleMin =
+			typeof record.scaleMin === "number" ? record.scaleMin : null;
+	}
+	if (typeof record.scaleMax === "number" || record.scaleMax === null) {
+		settings.scaleMax =
+			typeof record.scaleMax === "number" ? record.scaleMax : null;
+	}
+	if (isGradientName(record.colorGradient, settings.customGradients)) {
+		settings.colorGradient = record.colorGradient;
+	}
+
+	return settings;
 };
 
 const setCssProps = (el: HTMLElement, props: Record<string, string>): void => {

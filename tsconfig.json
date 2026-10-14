@@ -1,6 +1,6 @@
 {
 	"compilerOptions": {
-		"baseUrl": "src",
+		"baseUrl": ".",
 		"inlineSourceMap": true,
 		"inlineSources": true,
 		"module": "ESNext",
@@ -17,12 +17,24 @@
 		"strictBindCallApply": true,
 		"allowSyntheticDefaultImports": true,
 		"useUnknownInCatchVariables": true,
+		"skipLibCheck": true,
 		"lib": [
 			"DOM",
 			"ES5",
 			"ES6",
 			"ES7"
-		]
+		],
+	  "paths": {
+		        "api/*": ["./node_modules/obsidian-dataview/lib/api/*"],
+      "data-model/*": ["./node_modules/obsidian-dataview/lib/data-model/*"],
+      "data-index": ["./node_modules/obsidian-dataview/lib/data-index/index"],
+      "data-index/*": ["./node_modules/obsidian-dataview/lib/data-index/*"],
+      "data-import/*": ["./node_modules/obsidian-dataview/lib/data-import/*"],
+      "expression/*": ["./node_modules/obsidian-dataview/lib/expression/*"],
+      "query/*": ["./node_modules/obsidian-dataview/lib/query/*"],
+      "settings": ["./node_modules/obsidian-dataview/lib/settings"],
+      "index": ["./node_modules/obsidian-dataview/lib/index"]
+       }
 	},
 	"include": [
 		"src/**/*.ts"

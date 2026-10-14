@@ -8,10 +8,10 @@ import { type DataviewApi, getAPI } from "obsidian-dataview";
 import {
 	ActivityGraphSettingTab,
 	ActivityGraphSettings,
-	DEFAULT_SETTINGS,
 	GRADIENTS,
-	GradientPalette,
-} from "settings";
+	isGradientName,
+	normalizeSettings,
+} from "./settings";
 
 type HeatmapRow = {
 	date: string;
@@ -28,14 +28,6 @@ type DateWithToISO = {
 	toISODate: () => string | null | undefined;
 };
 
-const isGradientName = (
-	value: unknown,
-	customGradients: Record<string, GradientPalette>,
-): value is ActivityGraphSettings["colorGradient"] => {
-	if (typeof value !== "string") return false;
-	return value in GRADIENTS || value in customGradients;
-};
-
 const hasToISODate = (value: unknown): value is DateWithToISO => {
 	return (
 		typeof value === "object" &&
@@ -43,21 +35,6 @@ const hasToISODate = (value: unknown): value is DateWithToISO => {
 		"toISODate" in value &&
 		typeof (value as { toISODate?: unknown }).toISODate === "function"
 	);
-};
-
-const toGradientPalette = (value: unknown): GradientPalette | null => {
-	if (!Array.isArray(value) || value.length !== 4) return null;
-	if (
-		!value.every(
-			(color): color is string =>
-				typeof color === "string" && color.trim().length > 0,
-		)
-	) {
-		return null;
-	}
-	const [first, second, third, fourth] = value;
-	if (!first || !second || !third || !fourth) return null;
-	return [first, second, third, fourth];
 };
 
 export default class ActivityGraphPlugin extends Plugin {
@@ -144,84 +121,11 @@ export default class ActivityGraphPlugin extends Plugin {
 	}
 
 	async loadSettings() {
-		const data: unknown = await this.loadData();
-		this.settings = Object.assign(
-			{},
-			DEFAULT_SETTINGS,
-			this.normalizeSettings(data),
-		);
+		this.settings = normalizeSettings(await this.loadData());
 	}
 
 	async saveSettings() {
 		await this.saveData(this.settings);
-	}
-
-	normalizeSettings(data: unknown): Partial<ActivityGraphSettings> {
-		if (!data || typeof data !== "object") {
-			return {};
-		}
-
-		const record = data as Record<string, unknown>;
-		const settings: Partial<ActivityGraphSettings> = {};
-		const customGradients = this.normalizeCustomGradients(
-			record.customGradients,
-		);
-		if (Object.keys(customGradients).length > 0) {
-			settings.customGradients = customGradients;
-		}
-
-		if (typeof record.daysToShow === "number" && record.daysToShow > 0) {
-			settings.daysToShow = record.daysToShow;
-		}
-		if (typeof record.showMonthLabels === "boolean") {
-			settings.showMonthLabels = record.showMonthLabels;
-		}
-		if (typeof record.showWeekdayLabels === "boolean") {
-			settings.showWeekdayLabels = record.showWeekdayLabels;
-		}
-		if (typeof record.showLegend === "boolean") {
-			settings.showLegend = record.showLegend;
-		}
-		if (typeof record.startWeekOnMonday === "boolean") {
-			settings.startWeekOnMonday = record.startWeekOnMonday;
-		}
-		if (typeof record.legendLessLabel === "string") {
-			settings.legendLessLabel = record.legendLessLabel;
-		}
-		if (typeof record.legendMoreLabel === "string") {
-			settings.legendMoreLabel = record.legendMoreLabel;
-		}
-		if (typeof record.scaleMin === "number" || record.scaleMin === null) {
-			settings.scaleMin =
-				typeof record.scaleMin === "number" ? record.scaleMin : null;
-		}
-		if (typeof record.scaleMax === "number" || record.scaleMax === null) {
-			settings.scaleMax =
-				typeof record.scaleMax === "number" ? record.scaleMax : null;
-		}
-		if (
-			isGradientName(record.colorGradient, settings.customGradients ?? {})
-		) {
-			settings.colorGradient = record.colorGradient;
-		}
-
-		return settings;
-	}
-
-	normalizeCustomGradients(value: unknown): Record<string, GradientPalette> {
-		if (!value || typeof value !== "object") return {};
-
-		const record = value as Record<string, unknown>;
-		const normalized: Record<string, GradientPalette> = {};
-
-		for (const [name, palette] of Object.entries(record)) {
-			if (typeof name !== "string") continue;
-			const normalizedPalette = toGradientPalette(palette);
-			if (!normalizedPalette) continue;
-			normalized[name] = normalizedPalette;
-		}
-
-		return normalized;
 	}
 
 	normalizeRows(result: QueryResult): HeatmapRow[] {
