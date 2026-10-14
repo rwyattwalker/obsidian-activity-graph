@@ -4,6 +4,7 @@ import {
 	MarkdownRenderChild,
 	Plugin,
 } from "obsidian";
+import { type DataviewApi, getAPI } from "obsidian-dataview";
 import {
 	ActivityGraphSettingTab,
 	ActivityGraphSettings,
@@ -21,28 +22,7 @@ type GraphOverrides = Partial<ActivityGraphSettings> & {
 	title?: string;
 };
 
-type DataviewQueryResult = {
-	successful: boolean;
-	value: unknown;
-	error?: string;
-};
-
-type DataviewApi = {
-	query: (query: string, sourcePath?: string) => Promise<DataviewQueryResult>;
-	index: {
-		initialized: boolean;
-	};
-};
-
-type DataviewPlugin = {
-	api: DataviewApi;
-};
-
-type DataviewTableResult = {
-	type: "table";
-	headers?: string[];
-	values?: unknown[][];
-};
+type QueryResult = Awaited<ReturnType<DataviewApi["tryQuery"]>>;
 
 type DateWithToISO = {
 	toISODate: () => string | null | undefined;
@@ -54,34 +34,6 @@ const isGradientName = (
 ): value is ActivityGraphSettings["colorGradient"] => {
 	if (typeof value !== "string") return false;
 	return value in GRADIENTS || value in customGradients;
-};
-
-const isDataviewApi = (value: unknown): value is DataviewApi => {
-	return (
-		typeof value === "object" &&
-		value !== null &&
-		"query" in value &&
-		typeof (value as { query?: unknown }).query === "function"
-	);
-};
-
-const isDataviewPlugin = (value: unknown): value is DataviewPlugin => {
-	return (
-		typeof value === "object" &&
-		value !== null &&
-		"api" in value &&
-		isDataviewApi((value as { api?: unknown }).api)
-	);
-};
-
-const isDataviewTableResult = (
-	value: unknown,
-): value is DataviewTableResult => {
-	return (
-		typeof value === "object" &&
-		value !== null &&
-		(value as { type?: unknown }).type === "table"
-	);
 };
 
 const hasToISODate = (value: unknown): value is DateWithToISO => {
@@ -126,7 +78,7 @@ export default class ActivityGraphPlugin extends Plugin {
 
 				const render = async () => {
 					const current = ++generation;
-					const dv = this.getDataviewApi();
+					const dv = getAPI(this.app);
 
 					if (!dv || !dv.index.initialized) {
 						el.setText("Waiting for dataview...");
@@ -136,20 +88,13 @@ export default class ActivityGraphPlugin extends Plugin {
 					try {
 						const { query, overrides } = this.parseBlock(source);
 						const settings = { ...this.settings, ...overrides };
-						const result = await dv.query(query, ctx.sourcePath);
+						const result = await dv.tryQuery(query, ctx.sourcePath);
 
 						if (disposed || current !== generation) return;
 
 						el.empty();
 
-						if (!result.successful) {
-							el.createEl("pre", {
-								text: `Dataview query failed:\n${result.error ?? "Unknown error"}`,
-							});
-							return;
-						}
-
-						const rows = this.normalizeRows(result.value);
+						const rows = this.normalizeRows(result);
 
 						if (!rows.length) {
 							el.setText("No results.");
@@ -279,33 +224,13 @@ export default class ActivityGraphPlugin extends Plugin {
 		return normalized;
 	}
 
-	getDataviewApi(): DataviewApi | null {
-		const pluginsContainer = (
-			this.app as unknown as {
-				plugins?: { plugins?: Record<string, unknown> };
-			}
-		).plugins;
-		const dataview = pluginsContainer?.plugins?.dataview;
-		if (!dataview || !isDataviewPlugin(dataview)) return null;
-		return dataview.api;
-	}
+	normalizeRows(result: QueryResult): HeatmapRow[] {
+		if (result.type !== "table") return [];
 
-	normalizeRows(tableResult: unknown): HeatmapRow[] {
-		if (!isDataviewTableResult(tableResult)) {
-			return [];
-		}
+		const { headers, values } = result;
 
-		const headers = Array.isArray(tableResult.headers)
-			? tableResult.headers.filter(
-					(header): header is string => typeof header === "string",
-				)
-			: [];
-		const values = Array.isArray(tableResult.values)
-			? tableResult.values
-			: [];
-
-		const dateIndex = headers.findIndex((h) => h === "date");
-		const valueIndex = headers.findIndex((h) => h === "value");
+		const dateIndex = headers.indexOf("date");
+		const valueIndex = headers.indexOf("value");
 
 		if (dateIndex === -1 || valueIndex === -1) {
 			return [];
