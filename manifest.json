@@ -1,6 +1,6 @@
 {
-	"id": "activity-graph",
-	"name": "Activity Graph",
+	"id": "obsidian-activity-graph",
+	"name": "Obsidian Activity Graph",
 	"version": "0.1.0",
 	"minAppVersion": "0.15.0",
 	"description": "Render activity heatmaps from Dataview query results.",

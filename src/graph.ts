@@ -1,13 +1,13 @@
 import { type ActivityGraphSettings, GRADIENTS } from "./settings";
 
-export type HeatmapRow = {
+export type HeatmapRecord = {
 	date: string;
 	value: number;
 };
 
 export const renderCalendar = (
 	container: HTMLElement,
-	rows: HeatmapRow[],
+	rows: HeatmapRecord[],
 	settings: ActivityGraphSettings,
 	title?: string,
 ): void => {
@@ -53,7 +53,7 @@ const startOfWeek = (date: Date, mondayFirst: boolean): Date => {
 };
 
 const getScale = (
-	rows: HeatmapRow[],
+	rows: HeatmapRecord[],
 	start: Date,
 	end: Date,
 	settings: ActivityGraphSettings,
@@ -150,10 +150,15 @@ const renderWeekdayLabels = (
 	const labels = settings.startWeekOnMonday
 		? ["Mon", "", "Wed", "", "Fri", "", ""]
 		: ["Sun", "", "Tue", "", "Thu", "", "Sat"];
-	const labelsEl = container.createDiv({ cls: "activity-graph-weekday-labels" });
+	const labelsEl = container.createDiv({
+		cls: "activity-graph-weekday-labels",
+	});
 
 	for (const label of labels) {
-		labelsEl.createDiv({ text: label, cls: "activity-graph-weekday-label" });
+		labelsEl.createDiv({
+			text: label,
+			cls: "activity-graph-weekday-label",
+		});
 	}
 };
 
@@ -192,14 +197,21 @@ const applySizing = (
 
 		const availableWidth = Math.max(root.clientWidth - labelWidth, 0);
 		let gap = 4;
-		let cellSize = Math.floor((availableWidth - (weekCount - 1) * gap) / weekCount);
+		let cellSize = Math.floor(
+			(availableWidth - (weekCount - 1) * gap) / weekCount,
+		);
 
 		if (cellSize < 4) {
 			gap = 1;
-			cellSize = Math.floor((availableWidth - (weekCount - 1) * gap) / weekCount);
+			cellSize = Math.floor(
+				(availableWidth - (weekCount - 1) * gap) / weekCount,
+			);
 		}
 
-		root.style.setProperty("--activity-graph-cell-size", `${Math.max(cellSize, 4)}px`);
+		root.style.setProperty(
+			"--activity-graph-cell-size",
+			`${Math.max(cellSize, 4)}px`,
+		);
 		root.style.setProperty("--activity-graph-cell-gap", `${gap}px`);
 	};
 

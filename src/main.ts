@@ -6,7 +6,7 @@ import {
 } from "obsidian";
 import { type DataviewApi, getAPI } from "obsidian-dataview";
 import { parseBlock } from "./block";
-import { type HeatmapRow, renderCalendar } from "./graph";
+import { type HeatmapRecord, renderCalendar } from "./graph";
 import {
 	ActivityGraphSettingTab,
 	type ActivityGraphSettings,
@@ -24,7 +24,7 @@ export default class ActivityGraphPlugin extends Plugin {
 		this.registerMarkdownCodeBlockProcessor(
 			"activity-graph",
 			(source, container, context) =>
-				this.registerGraph(source, container, context),
+				this.handleCodeBlock(source, container, context),
 		);
 	}
 
@@ -36,7 +36,7 @@ export default class ActivityGraphPlugin extends Plugin {
 		await this.saveData(this.settings);
 	}
 
-	private registerGraph(
+	private handleCodeBlock(
 		source: string,
 		container: HTMLElement,
 		context: MarkdownPostProcessorContext,
@@ -104,7 +104,7 @@ export default class ActivityGraphPlugin extends Plugin {
 const normalizeRows = (
 	result: QueryResult,
 	dataview: DataviewApi,
-): HeatmapRow[] => {
+): HeatmapRecord[] => {
 	if (result.type !== "table") return [];
 
 	const dateIndex = result.headers.indexOf("date");

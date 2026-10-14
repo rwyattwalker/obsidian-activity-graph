@@ -152,7 +152,9 @@ const parsePaletteColors = (value: string): GradientPalette | null => {
 	return [first, second, third, fourth];
 };
 
-const getGradientOptions = (customGradients: Record<string, GradientPalette>): Record<string, string> => {
+const getGradientOptions = (
+	customGradients: Record<string, GradientPalette>,
+): Record<string, string> => {
 	const options: Record<string, string> = {
 		green: "Green",
 		blue: "Blue",
@@ -170,9 +172,13 @@ const getGradientOptions = (customGradients: Record<string, GradientPalette>): R
 
 const getGradientPalette = (
 	gradientName: string,
-	customGradients: Record<string, GradientPalette>
+	customGradients: Record<string, GradientPalette>,
 ): GradientPalette => {
-	return customGradients[gradientName] ?? GRADIENTS[gradientName as BuiltInGradientName] ?? GRADIENTS.green;
+	return (
+		customGradients[gradientName] ??
+		GRADIENTS[gradientName as BuiltInGradientName] ??
+		GRADIENTS.green
+	);
 };
 
 export class ActivityGraphSettingTab extends PluginSettingTab {
@@ -202,7 +208,7 @@ export class ActivityGraphSettingTab extends PluginSettingTab {
 							this.plugin.settings.daysToShow = parsed;
 							await this.plugin.saveSettings();
 						}
-					})
+					}),
 			);
 
 		new Setting(containerEl)
@@ -213,7 +219,7 @@ export class ActivityGraphSettingTab extends PluginSettingTab {
 					.onChange(async (value) => {
 						this.plugin.settings.showMonthLabels = value;
 						await this.plugin.saveSettings();
-					})
+					}),
 			);
 
 		new Setting(containerEl)
@@ -224,19 +230,17 @@ export class ActivityGraphSettingTab extends PluginSettingTab {
 					.onChange(async (value) => {
 						this.plugin.settings.showWeekdayLabels = value;
 						await this.plugin.saveSettings();
-					})
+					}),
 			);
 
-		new Setting(containerEl)
-			.setName("Show legend")
-			.addToggle((toggle) =>
-				toggle
-					.setValue(this.plugin.settings.showLegend)
-					.onChange(async (value) => {
-						this.plugin.settings.showLegend = value;
-						await this.plugin.saveSettings();
-					})
-			);
+		new Setting(containerEl).setName("Show legend").addToggle((toggle) =>
+			toggle
+				.setValue(this.plugin.settings.showLegend)
+				.onChange(async (value) => {
+					this.plugin.settings.showLegend = value;
+					await this.plugin.saveSettings();
+				}),
+		);
 
 		new Setting(containerEl)
 			.setName("Week starts on monday")
@@ -246,57 +250,63 @@ export class ActivityGraphSettingTab extends PluginSettingTab {
 					.onChange(async (value) => {
 						this.plugin.settings.startWeekOnMonday = value;
 						await this.plugin.saveSettings();
-					})
+					}),
 			);
 
-		new Setting(containerEl)
-			.setName("Less label")
-			.addText((text) =>
-				text
-					.setValue(this.plugin.settings.legendLessLabel)
-					.onChange(async (value) => {
-						this.plugin.settings.legendLessLabel = value;
-						await this.plugin.saveSettings();
-					})
-			);
+		new Setting(containerEl).setName("Less label").addText((text) =>
+			text
+				.setValue(this.plugin.settings.legendLessLabel)
+				.onChange(async (value) => {
+					this.plugin.settings.legendLessLabel = value;
+					await this.plugin.saveSettings();
+				}),
+		);
 
-		new Setting(containerEl)
-			.setName("More label")
-			.addText((text) =>
-				text
-					.setValue(this.plugin.settings.legendMoreLabel)
-					.onChange(async (value) => {
-						this.plugin.settings.legendMoreLabel = value;
-						await this.plugin.saveSettings();
-					})
-			);
+		new Setting(containerEl).setName("More label").addText((text) =>
+			text
+				.setValue(this.plugin.settings.legendMoreLabel)
+				.onChange(async (value) => {
+					this.plugin.settings.legendMoreLabel = value;
+					await this.plugin.saveSettings();
+				}),
+		);
 
 		new Setting(containerEl).setName("Scaling").setHeading();
 
 		new Setting(containerEl)
 			.setName("Minimum value")
 			.setDesc("Leave blank to keep the scale relative to the data.")
-				.addText((text) =>
-					text
-						.setPlaceholder("Relative")
-						.setValue(this.plugin.settings.scaleMin === null ? "" : String(this.plugin.settings.scaleMin))
-						.onChange(async (value) => {
-							this.plugin.settings.scaleMin = parseNumberOrNull(value);
+			.addText((text) =>
+				text
+					.setPlaceholder("Relative")
+					.setValue(
+						this.plugin.settings.scaleMin === null
+							? ""
+							: String(this.plugin.settings.scaleMin),
+					)
+					.onChange(async (value) => {
+						this.plugin.settings.scaleMin =
+							parseNumberOrNull(value);
 						await this.plugin.saveSettings();
-					})
+					}),
 			);
 
 		new Setting(containerEl)
 			.setName("Maximum value")
 			.setDesc("Leave blank to keep the scale relative to the data.")
-				.addText((text) =>
-					text
-						.setPlaceholder("Relative")
-						.setValue(this.plugin.settings.scaleMax === null ? "" : String(this.plugin.settings.scaleMax))
-						.onChange(async (value) => {
-							this.plugin.settings.scaleMax = parseNumberOrNull(value);
+			.addText((text) =>
+				text
+					.setPlaceholder("Relative")
+					.setValue(
+						this.plugin.settings.scaleMax === null
+							? ""
+							: String(this.plugin.settings.scaleMax),
+					)
+					.onChange(async (value) => {
+						this.plugin.settings.scaleMax =
+							parseNumberOrNull(value);
 						await this.plugin.saveSettings();
-					})
+					}),
 			);
 
 		new Setting(containerEl).setName("Color palettes").setHeading();
@@ -306,13 +316,19 @@ export class ActivityGraphSettingTab extends PluginSettingTab {
 			.setDesc("Default heatmap color theme")
 			.addDropdown((dropdown) =>
 				dropdown
-						.addOptions(getGradientOptions(this.plugin.settings.customGradients))
-						.setValue(this.plugin.settings.colorGradient)
-						.onChange(async (value) => {
-							this.plugin.settings.colorGradient = value;
-							renderGradientPreview(this.plugin.settings.colorGradient);
-							await this.plugin.saveSettings();
-						})
+					.addOptions(
+						getGradientOptions(
+							this.plugin.settings.customGradients,
+						),
+					)
+					.setValue(this.plugin.settings.colorGradient)
+					.onChange(async (value) => {
+						this.plugin.settings.colorGradient = value;
+						renderGradientPreview(
+							this.plugin.settings.colorGradient,
+						);
+						await this.plugin.saveSettings();
+					}),
 			);
 
 		const previewEl = gradientSetting.controlEl.createDiv({
@@ -322,13 +338,17 @@ export class ActivityGraphSettingTab extends PluginSettingTab {
 		const renderGradientPreview = (gradientName: GradientName) => {
 			previewEl.empty();
 
-			const gradient = getGradientPalette(gradientName, this.plugin.settings.customGradients);
+			const gradient = getGradientPalette(
+				gradientName,
+				this.plugin.settings.customGradients,
+			);
 
 			const emptyCell = previewEl.createDiv({
 				cls: "activity-graph-gradient-preview-cell",
 			});
 			setCssProps(emptyCell, {
-				"--activity-graph-preview-color": "var(--background-modifier-border)",
+				"--activity-graph-preview-color":
+					"var(--background-modifier-border)",
 			});
 
 			for (const color of gradient) {
@@ -346,20 +366,20 @@ export class ActivityGraphSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("Add custom palette")
-			.setDesc("Provide a name and four CSS colors (comma or space separated).")
-				.addText((text) =>
-					text
-						.setPlaceholder("My palette")
-						.onChange((value) => {
-							newPaletteName = value;
-						})
+			.setDesc(
+				"Provide a name and four CSS colors (comma or space separated).",
+			)
+			.addText((text) =>
+				text.setPlaceholder("My palette").onChange((value) => {
+					newPaletteName = value;
+				}),
 			)
 			.addText((text) =>
 				text
 					.setPlaceholder("#111111 #333333 #555555 #777777")
 					.onChange((value) => {
 						newPaletteColors = value;
-					})
+					}),
 			)
 			.addButton((button) =>
 				button.setButtonText("Add").onClick(async () => {
@@ -372,17 +392,21 @@ export class ActivityGraphSettingTab extends PluginSettingTab {
 					}
 
 					if (!palette) {
-						new Notice("Enter exactly four colors for the palette.");
+						new Notice(
+							"Enter exactly four colors for the palette.",
+						);
 						return;
 					}
 
 					this.plugin.settings.customGradients[name] = palette;
 					await this.plugin.saveSettings();
 					this.display();
-				})
+				}),
 			);
 
-		for (const [name, colors] of Object.entries(this.plugin.settings.customGradients)) {
+		for (const [name, colors] of Object.entries(
+			this.plugin.settings.customGradients,
+		)) {
 			const paletteSetting = new Setting(containerEl)
 				.setName(name)
 				.setDesc(colors.join(", "));
@@ -395,7 +419,8 @@ export class ActivityGraphSettingTab extends PluginSettingTab {
 				cls: "activity-graph-gradient-preview-cell",
 			});
 			setCssProps(emptyCell, {
-				"--activity-graph-preview-color": "var(--background-modifier-border)",
+				"--activity-graph-preview-color":
+					"var(--background-modifier-border)",
 			});
 
 			for (const color of colors) {
@@ -413,7 +438,7 @@ export class ActivityGraphSettingTab extends PluginSettingTab {
 					}
 					await this.plugin.saveSettings();
 					this.display();
-				})
+				}),
 			);
 		}
 	}
