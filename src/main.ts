@@ -87,13 +87,15 @@ export default class ActivityGraphPlugin extends Plugin {
 
 		const events: Events = this.app.metadataCache;
 		const readyRef = events.on("dataview:index-ready", () => void render());
-		this.registerDomEvent(window, "resize", render);
+		const onResize = () => void render();
+		window.addEventListener("resize", onResize);
 		context.addChild(
 			new (class extends MarkdownRenderChild {
 				onunload() {
 					disposed = true;
 					generation += 1;
 					events.offref(readyRef);
+					window.removeEventListener("resize", onResize);
 				}
 			})(container),
 		);
