@@ -11,11 +11,11 @@ Render a GitHub-style activity heatmap from Dataview queries. Use Dataview queri
 
 Use an `activity-graph` code block containing a Dataview query:
 
-```activity-graph
+````activity-graph
 TABLE file.day AS date, 1 AS value
 FROM "Daily"
 SORT file.day ASC
-```
+````
 
 ## Query requirements
 
